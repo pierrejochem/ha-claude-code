@@ -59,6 +59,10 @@ export async function openFolderPicker(target: string | null): Promise<void> {
       }, icon(ICON.folder), d));
     }
     if (!data.dirs.length) list.append(el('p', { class: 'session-empty', text: 'No folders inside this one.' }));
+    // No stopPropagation needed here: this handler hides the popover itself and never
+    // calls openFolderPicker, so this button is never detached, and by the time the
+    // click reaches main.ts's click-outside handler its `!refs.popover.hidden` guard
+    // already makes it a no-op.
     foot.append(el('button', { class: 'btn primary', type: 'button', text: 'Work in this folder', onclick: () => { state.current.cwd = data.path; pop.hidden = true; onHeaderChange(); } }));
   } catch (err) {
     list.append(el('p', { class: 'session-empty', text: err instanceof Error ? err.message : String(err) }));
