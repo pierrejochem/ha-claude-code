@@ -1,2 +1,8 @@
 docs/superpowers/
-.idea/.superpowers/
+.idea/
+.superpowers/
+node_modules/
+claude_code/app/dist/
+claude_code/app/.build-test/
+claude_code/app/public/app.js
+claude_code/app/public/app.js.map
