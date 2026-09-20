@@ -70,7 +70,9 @@ export type WireBlock =
 
 export interface WireMessage {
   role: string | undefined;
-  content: string | WireBlock[];
+  // `undefined` when the SDK handed us no message at all; slimMessage passes
+  // that through rather than inventing an empty string.
+  content: string | WireBlock[] | undefined;
 }
 
 export interface WireSdkMessage {

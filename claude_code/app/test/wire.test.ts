@@ -109,6 +109,26 @@ test('slimMessage survives a missing message', () => {
   assert.deepEqual(slimMessage(undefined), { role: undefined, content: undefined });
 });
 
+test('slimMessage passes a string tool_result content through clip', () => {
+  const out = slimMessage({
+    role: 'user',
+    content: [{ type: 'tool_result', tool_use_id: 'tu_3', is_error: false, content: 'short result' }],
+  });
+  const block = (out.content as any[])[0];
+  assert.equal(block.type, 'tool_result');
+  assert.equal(block.tool_use_id, 'tu_3');
+  assert.equal(block.is_error, false);
+  assert.equal(block.content, 'short result');
+
+  const long = 'r'.repeat(MAX_RESULT_CHARS + 25);
+  const outLong = slimMessage({
+    role: 'user',
+    content: [{ type: 'tool_result', tool_use_id: 'tu_4', is_error: false, content: long }],
+  });
+  const blockLong = (outLong.content as any[])[0];
+  assert.match(blockLong.content, /more characters not shown\)$/);
+});
+
 // --------------------------------------------------- describeSuggestions
 
 test('describeSuggestions formats allow rules', () => {
@@ -155,4 +175,18 @@ test('errorMessage handles Errors, strings and junk', () => {
   assert.equal(errorMessage({ message: 'shaped' }), 'shaped');
   assert.equal(errorMessage(null), 'null');
   assert.equal(errorMessage(undefined), 'undefined');
+});
+
+test('errorMessage matches String(err?.message || err) on falsy messages', () => {
+  // `new Error()` has an empty message; the expression this replaces falls
+  // through to String(err) and yields 'Error'. A blank string here would put
+  // an empty error row in the panel.
+  assert.equal(errorMessage(new Error()), 'Error');
+  assert.equal(errorMessage(new Error('')), 'Error');
+  assert.equal(errorMessage({ message: '' }), '[object Object]');
+  assert.equal(errorMessage(0), '0');
+});
+
+test('friendlyError does not blank out an empty-message Error', () => {
+  assert.equal(friendlyError(new Error()), 'Error');
 });

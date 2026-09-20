@@ -47,7 +47,7 @@ export function clip(text: unknown): unknown {
 export function slimMessage(message: unknown): WireMessage {
   const m = rec(message);
   if (!message || typeof m.content === 'string') {
-    return { role: m.role as string | undefined, content: clip(m.content) as string };
+    return { role: m.role as string | undefined, content: clip(m.content) as string | undefined };
   }
   const content = ((m.content as unknown[]) || []).map((block): WireBlock => {
     const b = rec(block);
@@ -94,13 +94,10 @@ export function describeSuggestions(suggestions: PermissionSuggestion[]): string
   return rules.slice(0, 3).join(', ') || null;
 }
 
-/** Replaces the `String(err?.message || err)` that was repeated across the old server. */
+/** Exactly `String(err?.message || err)`, which this replaces across the old server. */
 export function errorMessage(err: unknown): string {
-  if (err instanceof Error) return err.message;
-  if (err && typeof err === 'object' && typeof (err as { message?: unknown }).message === 'string') {
-    return (err as { message: string }).message;
-  }
-  return String(err);
+  const message = err == null ? undefined : (err as { message?: unknown }).message;
+  return String(message || err);
 }
 
 export function friendlyError(err: unknown): string {
