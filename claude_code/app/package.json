@@ -10,7 +10,7 @@
     "build:server": "tsc -p tsconfig.server.json",
     "build:web": "esbuild src/web/main.ts --bundle --format=iife --target=es2022 --outfile=public/app.js --sourcemap --minify",
     "typecheck": "tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.web.json --noEmit",
-    "test": "tsc -p tsconfig.test.json && node --test .build-test/test/**/*.test.js",
+    "test": "tsc -p tsconfig.test.json && node --test \".build-test/test/**/*.test.js\"",
     "start": "node dist/server.js",
     "dev": "npm run build && DEV=1 PORT=8099 node dist/server.js"
   },
