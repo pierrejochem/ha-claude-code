@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
 - The add-on's server and panel are now written in TypeScript and built
   during the image build. The migration also fixes two defects present in
@@ -14,6 +14,9 @@
   payloads are dropped, which the panel never rendered anyway, and tool results
   longer than 30 000 characters are clipped exactly as they were live — so a
   replayed transcript now matches what the session showed, rather than more.
+- Installing from the store no longer compiles the add-on on your device; it
+  downloads a ready-built image instead. The download is a similar size either
+  way — what goes away is the build step.
 
 ## 0.1.0
 

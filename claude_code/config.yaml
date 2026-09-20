@@ -1,6 +1,10 @@
 name: Claude Code
-version: "0.1.0"
+version: "0.2.0"
 slug: claude_code
+# Prebuilt by .github/workflows/release.yml. The Supervisor substitutes {arch}
+# and pulls the tag matching `version` above, so the two must stay in step —
+# the release workflow fails if they do not.
+image: ghcr.io/pierrejochem/{arch}-addon-claude_code
 description: >-
   Claude Code in your Home Assistant sidebar, with a chat panel modelled on
   the Claude Desktop app. Works directly on your configuration.
