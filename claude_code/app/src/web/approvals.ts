@@ -34,11 +34,7 @@ export function permissionTitle(a: EvPermission): string {
 }
 
 function answer(a: EvPermission, decision: PermissionDecision): void {
-  // state.current.liveId types as nullable, but a permission event can only
-  // reach state.approvals through the 'event' branch in main.ts's dispatcher,
-  // which requires msg.liveId === state.current.liveId before calling into
-  // applyEvent — so it is a string by the time an approval card exists.
-  sendWs({ type: 'permission', liveId: state.current.liveId!, requestId: a.requestId, decision });
+  sendWs({ type: 'permission', liveId: state.current.liveId, requestId: a.requestId, decision });
   state.approvals = state.approvals.filter((x) => x.requestId !== a.requestId);
   renderApprovals();
 }
@@ -75,7 +71,7 @@ export function renderApprovals(): void {
     const note = el('input', { type: 'text', placeholder: 'Or tell Claude what to do instead', 'aria-label': 'Message to send with Deny' });
     const deny = () => answer(a, { behavior: 'deny', message: note.value });
     note.addEventListener('keydown', (e) => {
-      if ((e as KeyboardEvent).key === 'Enter' && note.value.trim()) deny();
+      if (e.key === 'Enter' && note.value.trim()) deny();
     });
     const sub = [a.description, a.reason, a.blockedPath ? `Path: ${a.blockedPath}` : null, a.subagent ? 'Requested by a sub-agent' : null]
       .filter(Boolean)

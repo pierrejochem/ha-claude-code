@@ -200,7 +200,10 @@ export interface MsgAttach { type: 'attach'; liveId: string; since?: number }
 export interface MsgInterrupt { type: 'interrupt'; liveId: string }
 export interface MsgPermission {
   type: 'permission';
-  liveId: string;
+  // Null when the session closed or was evicted while its card was still on
+  // screen: the panel still sends the answer and the server's `need()` reports
+  // the session is gone, which is what the user sees.
+  liveId: string | null;
   requestId: string;
   decision?: PermissionDecision;
 }

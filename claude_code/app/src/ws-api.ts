@@ -28,7 +28,7 @@ import type {
 export interface WsDeps {
   publicState: () => PublicState;
   liveList: () => SessionSummary[];
-  need: (liveId: string) => LiveSession;
+  need: (liveId: string | null) => LiveSession;
   startSession: (msg: MsgStart) => Promise<LiveSession>;
   get: (liveId: string) => LiveSession | undefined;
 }
