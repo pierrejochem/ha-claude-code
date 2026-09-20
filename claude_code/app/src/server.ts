@@ -153,8 +153,8 @@ const wsApi = createWsApi({
 });
 const { broadcast } = wsApi;
 
-function need(liveId: string): LiveSession {
-  const session = live.get(liveId);
+function need(liveId: string | null): LiveSession {
+  const session = liveId ? live.get(liveId) : undefined;
   if (!session) throw new Error('That session is no longer running. Send your message again to resume it.');
   return session;
 }
