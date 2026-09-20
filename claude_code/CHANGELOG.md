@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
 - The add-on's server and panel are now written in TypeScript and built
   during the image build. The migration also fixes two defects present in
