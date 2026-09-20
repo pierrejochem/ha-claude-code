@@ -80,7 +80,9 @@ export interface WireMessage {
 
 export interface WireSdkMessage {
   type: 'assistant' | 'user';
-  uuid: string;
+  // Optional on the SDK's live user message; passed straight through rather
+  // than invented. The panel carries it but does not read it.
+  uuid: string | undefined;
   parent_tool_use_id: string | null;
   message: WireMessage;
 }
@@ -106,7 +108,9 @@ export interface EvInit {
   sessionId: string;
   model?: string;
   cwd?: string;
-  mode?: PermissionMode;
+  // Whatever mode the CLI reports for itself, which is a wider set than this
+  // add-on's own MODES. Recorded for the log; the panel does not read it.
+  mode?: string;
 }
 export interface EvSdk { k: 'sdk'; m: WireSdkMessage }
 export interface EvStream { k: 'stream'; event: WireStreamEvent }
