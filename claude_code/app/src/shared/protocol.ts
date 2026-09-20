@@ -57,9 +57,12 @@ export interface WireToolUseBlock { type: 'tool_use'; id: string; name: string; 
 export interface WireImageBlock { type: 'image' }
 export interface WireToolResultBlock {
   type: 'tool_result';
-  tool_use_id: string;
+  // Both of these pass straight through from the SDK block. A tool that
+  // returned nothing, or a malformed block, leaves them undefined; the
+  // mappers forward that rather than inventing a value.
+  tool_use_id: string | undefined;
   is_error: boolean;
-  content: string | Array<{ type: string; text?: string }>;
+  content: string | Array<{ type: string; text?: string }> | undefined;
 }
 export type WireBlock =
   | WireTextBlock
