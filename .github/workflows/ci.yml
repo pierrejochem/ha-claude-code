@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: check (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 20 is the engines floor in package.json; 24 is what the add-on image
+        # ships. Testing both keeps the declared floor honest.
+        node: ['20', '24']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: claude_code/app/package-lock.json
+
+      - name: Install
+        working-directory: claude_code/app
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: claude_code/app
+        run: npm run typecheck
+
+      - name: Test
+        working-directory: claude_code/app
+        run: npm test
+
+      - name: Build
+        working-directory: claude_code/app
+        run: npm run build
+
+      - name: Assert build artifacts exist
+        working-directory: claude_code/app
+        run: test -f dist/server.js && test -f public/app.js
+
+  docker:
+    name: docker (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Not redundant with the release workflow: esbuild ships per-platform
+      # binaries, so an aarch64 image build can fail where amd64 passes.
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: claude_code
+          push: false
+          build-args: |
+            BUILD_VERSION=ci
+            BUILD_ARCH=${{ matrix.arch }}
+          cache-from: type=gha,scope=${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.arch }}
