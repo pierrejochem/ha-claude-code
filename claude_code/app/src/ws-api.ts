@@ -165,6 +165,9 @@ export function createWsApi(deps: WsDeps): {
     });
   });
 
+  // Deliberately omits the remoteAllowed/pathname gate: this module has no
+  // access to DEV/INGRESS_PROXY. Callers (server.ts) must check those and
+  // destroy the socket themselves before calling this.
   function handleUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer): void {
     wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
   }
