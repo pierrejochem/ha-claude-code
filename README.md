@@ -20,8 +20,8 @@ claude_code/
 
 1. Settings > Apps > App store > menu > **Repositories**, and add
    `https://github.com/pierrejochem/ha-claude-code`.
-2. "Claude Code" appears in the store. **Install** — this pulls a prebuilt image,
-   so it takes about as long as the download.
+2. "Claude Code" appears in the store. **Install** — this downloads a ready-built
+   image instead of compiling the add-on on the device.
 3. Configuration tab: paste a token from `claude setup-token` or an API key.
 4. Start, then open **Claude Code** in the sidebar.
 
@@ -29,12 +29,17 @@ claude_code/
 
 1. Copy the `claude_code` folder to `/addons/claude_code` on the Home Assistant
    machine (Samba share `addons`, or the SSH app).
-2. Delete the `image:` line from `/addons/claude_code/config.yaml`. Without that,
-   the Supervisor pulls the published image instead of building your copy.
+2. Delete the `image:` line from `/addons/claude_code/config.yaml`. Without it the
+   Supervisor pulls the published image instead of building your copy. That line
+   is tracked in git, so **re-copying the folder brings it back** — delete it
+   again every time you re-sync, or the add-on silently reverts to the released
+   version with no version change to warn you.
 3. Settings > Apps > App store > menu > **Check for updates**. "Claude Code"
    appears under **Local apps**.
 4. Install. The image is built on the device; on a Raspberry Pi 5 expect a few
    minutes, most of it downloading the Claude Code binary (about 200 MB).
+5. For a later edit: re-copy the folder, delete the `image:` line again, then use
+   **Rebuild** on the add-on's Info tab.
 
 ## Work on the panel without Home Assistant
 
