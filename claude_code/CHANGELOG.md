@@ -8,6 +8,12 @@
   permission had no description, reason, blocked path or sub-agent flag, and
   the server crashing on a `null` WebSocket payload (reachable only from the
   Home Assistant ingress proxy).
+- The working-folder popover no longer closes when you click into a subfolder.
+- Reopening a session from the sidebar now transfers the same slimmed messages
+  the session sent while it was running, instead of the raw transcript. Image
+  payloads are dropped, which the panel never rendered anyway, and tool results
+  longer than 30 000 characters are clipped exactly as they were live — so a
+  replayed transcript now matches what the session showed, rather than more.
 
 ## 0.1.0
 
