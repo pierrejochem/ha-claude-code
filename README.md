@@ -9,11 +9,11 @@ claude_code/
   Dockerfile           Alpine base + Node + the packages Claude Code needs on musl
   run.sh               sets HOME=/data/home so sessions and rules persist
   app/
-    server.js          HTTP + WebSocket server, ingress-only
-    lib/live-session.js  one Agent SDK query() per running session
-    lib/prompt.js      Home Assistant context appended to the system prompt
-    bin/ha-api         curl wrapper for the Core and Supervisor APIs
-    public/            the panel (plain HTML, CSS, JS; no build step)
+    src/server.ts        HTTP + WebSocket server, ingress-only
+    src/live-session.ts  one Agent SDK query() per running session
+    src/prompt.ts        Home Assistant context appended to the system prompt
+    bin/ha-api            curl wrapper for the Core and Supervisor APIs
+    public/               the panel (built from src/web with esbuild)
 ```
 
 ## Install as a local app
@@ -35,7 +35,7 @@ To install from GitHub instead, push this repository, set your URL in
 ```
 cd claude_code/app
 npm install
-npm run dev        # http://localhost:8099, working folder = current directory
+npm run dev        # builds, then http://localhost:8099, working folder = current directory
 ```
 
 Dev mode skips the ingress IP check and uses whatever Claude Code login the

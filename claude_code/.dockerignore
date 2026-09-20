@@ -1,0 +1,7 @@
+# Build context is claude_code/. Exclude host build artifacts so the image
+# build always installs and compiles fresh instead of copying host-platform
+# binaries (e.g. esbuild) or stale output over what `npm ci`/`npm run build`
+# produce inside the image.
+app/node_modules
+app/dist
+app/.build-test
