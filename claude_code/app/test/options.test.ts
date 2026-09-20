@@ -33,6 +33,14 @@ test('resolves before comparing, so traversal cannot escape', () => {
   assert.equal(inside('/homeassistant/./www'), true);
 });
 
+test('rejects a relative path, which resolves against the process cwd', () => {
+  // path.resolve() turns this into <cwd>/../etc/passwd, which is outside every
+  // root. The production path resolves twice — once in the /api/dirs handler and
+  // once inside isInsideRoots — and this pins that either one alone is enough.
+  assert.equal(inside('../etc/passwd'), false);
+  assert.equal(inside('etc/passwd'), false);
+});
+
 test('rejects empty input', () => {
   assert.equal(inside(''), false);
   assert.equal(inside(null), false);

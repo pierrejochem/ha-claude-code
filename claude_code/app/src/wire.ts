@@ -67,6 +67,17 @@ export function slimMessage(message: unknown): WireMessage {
     }
     if (b.type === 'thinking') return { type: 'thinking', thinking: b.thinking as string };
     if (b.type === 'image') return { type: 'image' };
+    // Pass-through for SDK block kinds outside WireBlock's five members
+    // (server_tool_use, web_search_tool_result, redacted_thinking, or
+    // anything added later). This is deliberate, not a gap to close: the
+    // panel's render sites (src/web/transcript.ts) are if/else-if chains
+    // with no exhaustiveness check, so an unrecognised kind matches no
+    // branch and is dropped there — exactly what the JavaScript did. Giving
+    // WireBlock a `{ type: string }` catch-all member would destroy the
+    // discriminated union (block.type === 'text' would stop narrowing to
+    // WireTextBlock and the render chains would no longer compile), and a
+    // named variant listing today's extra kinds would commit this repo to
+    // tracking the SDK's block taxonomy for a branch the panel never renders.
     return block as WireBlock;
   });
   return { role: m.role as string | undefined, content };

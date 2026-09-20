@@ -64,6 +64,8 @@ export interface WireToolResultBlock {
   is_error: boolean;
   content: string | Array<{ type: string; text?: string }> | undefined;
 }
+// Not exhaustive over the SDK's block kinds — see wire.ts's pass-through for
+// the block kinds this union deliberately leaves uncovered.
 export type WireBlock =
   | WireTextBlock
   | WireThinkingBlock

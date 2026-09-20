@@ -56,6 +56,10 @@ export async function handleApi(
           type: m.type as WireSdkMessage['type'],
           uuid: m.uuid,
           parent_tool_use_id: m.parent_tool_use_id ?? null,
+          // Same inexactness as wire.ts's pass-through, and worse in one
+          // respect: this forwards the raw, unslimmed SDK message, so it can
+          // carry both out-of-union block kinds and unclipped content —
+          // unlike the live path, which runs slimMessage first.
           message: m.message as WireSdkMessage['message'],
         };
       }),
