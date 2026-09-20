@@ -1,0 +1,41 @@
+configuration:
+  claude_oauth_token:
+    name: Claude subscription token
+    description: >-
+      Long-lived token from `claude setup-token` (Pro, Max, Team or Enterprise).
+      Run that command on any computer where Claude Code is installed and paste
+      the result here.
+  anthropic_api_key:
+    name: Anthropic API key
+    description: >-
+      Alternative to the subscription token. Billed per use through the Claude
+      Console. If both are set, Claude Code uses the API key.
+  default_model:
+    name: Default model
+    description: Model alias or full model name, for example `sonnet` or `opus`. Leave empty for Claude Code's default.
+  default_permission_mode:
+    name: Default permission mode
+    description: >-
+      `default` asks before edits and commands, `acceptEdits` applies file edits
+      without asking, `plan` is read-only until you approve a plan, `auto` lets a
+      classifier decide (not available on every plan).
+  working_directory:
+    name: Default working folder
+    description: Folder new sessions start in. `/homeassistant` is your Home Assistant configuration.
+  expose_ha_api:
+    name: Let Claude talk to Home Assistant
+    description: >-
+      Gives Claude's shell the Supervisor token so it can read states, call
+      services, validate the configuration and restart Core. Each command still
+      goes through the permission prompt.
+  protect_secrets:
+    name: Keep secrets out of reach
+    description: >-
+      Blocks Claude's file tools from reading secrets.yaml and the auth files in
+      .storage. Best effort - a shell command you approve can still read them.
+  max_live_sessions:
+    name: Sessions kept running
+    description: Each running session is a separate Claude Code process (roughly 300-500 MB). Idle ones are closed first.
+  idle_timeout_minutes:
+    name: Close idle sessions after (minutes)
+    description: Closed sessions stay in the sidebar and resume when you send the next message.

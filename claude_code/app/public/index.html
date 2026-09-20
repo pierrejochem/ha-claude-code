@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <title>Claude Code</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <div class="app" id="app">
+
+    <aside class="sidebar" id="sidebar" aria-label="Sessions">
+      <div class="sidebar-head">
+        <span class="brand">
+          <svg class="mark" viewBox="0 0 24 24" aria-hidden="true"><use href="#mark"></use></svg>
+          Claude Code
+        </span>
+        <button class="icon-btn only-mobile" id="closeSidebar" aria-label="Close sessions">
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+
+      <button class="new-session" id="newSession">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        New session
+      </button>
+
+      <nav class="session-list" id="sessionList"></nav>
+
+      <div class="sidebar-foot">
+        <span class="conn" id="conn"><i></i><span id="connText">Connecting</span></span>
+        <button class="icon-btn" id="themeToggle" aria-label="Switch between light and dark">
+          <svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+        </button>
+      </div>
+    </aside>
+    <div class="scrim" id="scrim"></div>
+
+    <main class="main">
+      <header class="topbar">
+        <button class="icon-btn only-mobile" id="openSidebar" aria-label="Show sessions">
+          <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+        <div class="topbar-title">
+          <h1 id="title">New session</h1>
+          <span class="topbar-path" id="titlePath"></span>
+        </div>
+      </header>
+
+      <section class="scroller" id="scroller">
+        <div class="column">
+          <div id="welcome" class="welcome" hidden></div>
+          <div id="transcript" class="transcript" aria-live="polite"></div>
+          <div id="working" class="working" hidden>
+            <svg class="mark spin" viewBox="0 0 24 24" aria-hidden="true"><use href="#mark"></use></svg>
+            <span id="workingText">Working</span>
+          </div>
+        </div>
+      </section>
+
+      <footer class="dock">
+        <div class="column">
+          <div id="approvals"></div>
+
+          <div class="composer" id="composer">
+            <div class="attachments" id="attachments" hidden></div>
+            <textarea id="input" rows="1" placeholder="Describe what you want done" aria-label="Message to Claude"></textarea>
+            <div class="composer-row">
+              <button class="chip" id="folderChip" aria-haspopup="dialog" title="Working folder">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+                <span id="folderLabel">Folder</span>
+              </button>
+              <label class="chip select">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6z"/></svg>
+                <select id="modeSelect" aria-label="Permission mode"></select>
+              </label>
+              <label class="chip select">
+                <select id="modelSelect" aria-label="Model"></select>
+              </label>
+              <span class="spacer"></span>
+              <button class="icon-btn" id="attachBtn" aria-label="Attach an image">
+                <svg viewBox="0 0 24 24"><path d="M21 12.5l-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8L13 4.9a3.7 3.7 0 0 1 5.2 5.2l-8.3 8.3a1.8 1.8 0 0 1-2.6-2.6l7.6-7.6"/></svg>
+              </button>
+              <input type="file" id="fileInput" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>
+              <button class="send" id="sendBtn" aria-label="Send message">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5.5 11.5L12 5l6.5 6.5"/></svg>
+              </button>
+              <button class="send stop" id="stopBtn" aria-label="Stop Claude" hidden>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg>
+              </button>
+            </div>
+          </div>
+          <p class="fineprint" id="fineprint">Claude edits your live configuration. Review what it changes.</p>
+        </div>
+      </footer>
+    </main>
+  </div>
+
+  <div class="popover" id="folderPopover" role="dialog" aria-label="Choose a working folder" hidden></div>
+  <div class="toast" id="toast" role="status" hidden></div>
+
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="mark" viewBox="0 0 24 24">
+      <g stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none">
+        <path d="M12 2.5v19M2.5 12h19M5.3 5.3l13.4 13.4M18.7 5.3L5.3 18.7"/>
+      </g>
+    </symbol>
+  </svg>
+
+  <script src="app.js" defer></script>
+</body>
+</html>
