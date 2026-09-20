@@ -7,6 +7,7 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { listSessions, getSessionMessages, getSessionInfo } from '@anthropic-ai/claude-agent-sdk';
 import { isInsideRoots, defaultCwd } from './options.js';
+import { slimMessage } from './wire.js';
 import type { PublicState, SessionListItem, SessionDetail, DirListing, WireSdkMessage } from './shared/protocol.js';
 
 export function sendJson(res: ServerResponse, status: number, body: unknown): void {
@@ -56,11 +57,12 @@ export async function handleApi(
           type: m.type as WireSdkMessage['type'],
           uuid: m.uuid,
           parent_tool_use_id: m.parent_tool_use_id ?? null,
-          // Same inexactness as wire.ts's pass-through, and worse in one
-          // respect: this forwards the raw, unslimmed SDK message, so it can
-          // carry both out-of-union block kinds and unclipped content —
-          // unlike the live path, which runs slimMessage first.
-          message: m.message as WireSdkMessage['message'],
+          // Same narrowing the live path applies in live-session.ts, so a
+          // replayed transcript matches what the session showed while running:
+          // tool results clipped at MAX_RESULT_CHARS and image blocks reduced to
+          // their type. slimMessage takes `unknown` and returns WireMessage, so
+          // no cast is needed here.
+          message: slimMessage(m.message),
         };
       }),
     };
