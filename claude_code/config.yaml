@@ -1,0 +1,56 @@
+name: Claude Code
+version: "0.1.0"
+slug: claude_code
+description: >-
+  Claude Code in your Home Assistant sidebar, with a chat panel modelled on
+  the Claude Desktop app. Works directly on your configuration.
+arch:
+  - aarch64
+  - amd64
+stage: experimental
+init: false
+startup: application
+boot: auto
+
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:creation
+panel_title: Claude Code
+panel_admin: true
+
+# Lets Claude query states, call services, validate config and restart Core
+# through the Supervisor proxy. Turn off with the expose_ha_api option.
+homeassistant_api: true
+hassio_api: true
+hassio_role: homeassistant
+
+map:
+  - type: homeassistant_config
+    read_only: false
+  - type: addon_config
+    read_only: false
+  - type: share
+    read_only: false
+
+backup_exclude:
+  - "home/.npm/**"
+  - "home/.cache/**"
+
+options:
+  default_permission_mode: default
+  working_directory: /homeassistant
+  expose_ha_api: true
+  protect_secrets: true
+  max_live_sessions: 3
+  idle_timeout_minutes: 20
+
+schema:
+  claude_oauth_token: password?
+  anthropic_api_key: password?
+  default_model: str?
+  default_permission_mode: list(default|acceptEdits|plan|auto)
+  working_directory: str
+  expose_ha_api: bool
+  protect_secrets: bool
+  max_live_sessions: int(1,6)
+  idle_timeout_minutes: int(2,240)

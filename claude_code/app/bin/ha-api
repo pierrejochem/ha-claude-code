@@ -1,0 +1,32 @@
+#!/bin/sh
+# ha-api METHOD PATH [JSON_BODY]
+#   ha-api GET  /core/api/states/sun.sun              Home Assistant REST API
+#   ha-api POST /core/api/services/automation/reload
+#   ha-api POST /core/check                           Supervisor: validate config
+#   ha-api POST /core/restart                         Supervisor: restart Core
+set -eu
+
+if [ "$#" -lt 2 ]; then
+  echo "usage: ha-api METHOD PATH [JSON_BODY]" >&2
+  exit 2
+fi
+if [ -z "${SUPERVISOR_TOKEN:-}" ]; then
+  echo "ha-api: no Supervisor token. Turn on 'Let Claude talk to Home Assistant' in the add-on configuration." >&2
+  exit 1
+fi
+
+method="$1"
+path="$2"
+body="${3:-}"
+case "$path" in /*) ;; *) path="/$path" ;; esac
+
+if [ -n "$body" ]; then
+  exec curl -sS --fail-with-body -X "$method" \
+    -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d "$body" "http://supervisor${path}"
+else
+  exec curl -sS --fail-with-body -X "$method" \
+    -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
+    "http://supervisor${path}"
+fi
