@@ -52,6 +52,9 @@ jobs:
 
   publish:
     name: publish (${{ matrix.arch }})
+    # `check` runs the whole CI workflow, including both architecture image builds.
+    # Depending on it means neither arch is pushed unless both build — otherwise a
+    # failure on one would leave :<version> resolvable for the other and 404 for it.
     needs: [verify, check]
     runs-on: ${{ matrix.runner }}
     permissions:
@@ -84,12 +87,40 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: claude_code
-          push: ${{ inputs.dry_run != true }}
+          # Only a tag push publishes. `verify` skips its tag/version comparison on
+          # a manual dispatch, so without this guard a dispatch from any branch
+          # could push an unchecked :<version> and :latest.
+          push: ${{ github.ref_type == 'tag' && inputs.dry_run != true }}
           tags: |
             ghcr.io/pierrejochem/${{ matrix.arch }}-addon-claude_code:${{ needs.verify.outputs.version }}
             ghcr.io/pierrejochem/${{ matrix.arch }}-addon-claude_code:latest
           build-args: |
             BUILD_VERSION=${{ needs.verify.outputs.version }}
             BUILD_ARCH=${{ matrix.arch }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/pierrejochem/ha-claude-code
+          provenance: false
           cache-from: type=gha,scope=${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=${{ matrix.arch }}
+
+  verify-pull:
+    name: verify anonymous pull (${{ matrix.arch }})
+    needs: [verify, publish]
+    if: ${{ github.ref_type == 'tag' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, aarch64]
+    steps:
+      # The runner has no GHCR credentials, so this fails exactly the way a user's
+      # Supervisor would if the package were still private.
+      - name: Pull the published manifest without credentials
+        run: |
+          set -euo pipefail
+          image="ghcr.io/pierrejochem/${{ matrix.arch }}-addon-claude_code:${{ needs.verify.outputs.version }}"
+          echo "Inspecting $image anonymously"
+          docker run --rm gcr.io/go-containerregistry/crane manifest "$image" > /dev/null
+          echo "OK: $image is publicly pullable"

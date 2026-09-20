@@ -29,9 +29,9 @@ claude_code/
 
 1. Copy the `claude_code` folder to `/addons/claude_code` on the Home Assistant
    machine (Samba share `addons`, or the SSH app).
-2. Delete the `image:` line from `/addons/claude_code/config.yaml`. Without it the
-   Supervisor pulls the published image instead of building your copy. That line
-   is tracked in git, so **re-copying the folder brings it back** — delete it
+2. Delete the `image:` line from `/addons/claude_code/config.yaml`. While that line
+   is there the Supervisor pulls the published image instead of building your copy.
+   It is tracked in git, so **re-copying the folder brings it back** — delete it
    again every time you re-sync, or the add-on silently reverts to the released
    version with no version change to warn you.
 3. Settings > Apps > App store > menu > **Check for updates**. "Claude Code"
