@@ -57,10 +57,10 @@ export function slimMessage(message: unknown): WireMessage {
             const cb = rec(c);
             return cb.type === 'text' ? { type: 'text', text: clip(cb.text) as string } : { type: cb.type as string };
           })
-        : (clip(b.content) as string);
+        : (clip(b.content) as string | undefined);
       return {
         type: 'tool_result',
-        tool_use_id: b.tool_use_id as string,
+        tool_use_id: b.tool_use_id as string | undefined,
         is_error: Boolean(b.is_error),
         content: inner,
       };

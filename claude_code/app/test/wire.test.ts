@@ -129,6 +129,18 @@ test('slimMessage passes a string tool_result content through clip', () => {
   assert.match(blockLong.content, /more characters not shown\)$/);
 });
 
+test('slimMessage handles tool_result with no content field', () => {
+  const out = slimMessage({
+    role: 'user',
+    content: [{ type: 'tool_result', tool_use_id: 'tu_5', is_error: true }],
+  });
+  const block = (out.content as any[])[0];
+  assert.equal(block.type, 'tool_result');
+  assert.equal(block.tool_use_id, 'tu_5');
+  assert.equal(block.is_error, true);
+  assert.equal(block.content, undefined);
+});
+
 // --------------------------------------------------- describeSuggestions
 
 test('describeSuggestions formats allow rules', () => {
