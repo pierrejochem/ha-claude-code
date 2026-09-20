@@ -5,3 +5,6 @@
 app/node_modules
 app/dist
 app/.build-test
+# Test sources have no build or runtime purpose in the image: `npm run build`
+# is build:server + build:web, neither of which reads test/.
+app/test

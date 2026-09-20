@@ -21,6 +21,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // package.json live.
 const APP_ROOT = path.resolve(__dirname, '..');
 const PUBLIC_DIR = path.join(APP_ROOT, 'public');
+// Reads the image's own package.json, a first-party file present by construction.
 const PKG = JSON.parse(fs.readFileSync(path.join(APP_ROOT, 'package.json'), 'utf8')) as { version: string };
 
 // ----------------------------------------------------------- live sessions

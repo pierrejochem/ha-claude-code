@@ -9,6 +9,7 @@ import {
   friendlyError,
   errorMessage,
 } from '../src/wire.js';
+import type { WireBlock } from '../src/shared/protocol.js';
 
 // ------------------------------------------------------------------- clip
 
@@ -80,11 +81,14 @@ test('slimMessage reshapes tool_result blocks and clips their text', () => {
     role: 'user',
     content: [{ type: 'tool_result', tool_use_id: 'tu_1', is_error: true, content: [{ type: 'text', text: long }, { type: 'image', source: { data: 'BIG' } }] }],
   });
-  const block = (out.content as any[])[0];
+  const block = (out.content as WireBlock[])[0];
   assert.equal(block.type, 'tool_result');
   assert.equal(block.tool_use_id, 'tu_1');
   assert.equal(block.is_error, true);
-  assert.match(block.content[0].text, /more characters not shown\)$/);
+  assert.ok(Array.isArray(block.content));
+  const first = block.content[0];
+  assert.ok(typeof first.text === 'string');
+  assert.match(first.text, /more characters not shown\)$/);
   assert.deepEqual(block.content[1], { type: 'image' }, 'image payloads are dropped, only the type survives');
 });
 
@@ -96,13 +100,13 @@ test('slimMessage strips image payloads and keeps thinking text', () => {
       { type: 'thinking', thinking: 'considering', signature: 'sig' },
     ],
   });
-  assert.deepEqual((out.content as any[])[0], { type: 'image' });
-  assert.deepEqual((out.content as any[])[1], { type: 'thinking', thinking: 'considering' });
+  assert.deepEqual((out.content as WireBlock[])[0], { type: 'image' });
+  assert.deepEqual((out.content as WireBlock[])[1], { type: 'thinking', thinking: 'considering' });
 });
 
 test('slimMessage passes other blocks through untouched', () => {
   const out = slimMessage({ role: 'assistant', content: [{ type: 'tool_use', id: 'tu_2', name: 'Bash', input: { command: 'ls' } }] });
-  assert.deepEqual((out.content as any[])[0], { type: 'tool_use', id: 'tu_2', name: 'Bash', input: { command: 'ls' } });
+  assert.deepEqual((out.content as WireBlock[])[0], { type: 'tool_use', id: 'tu_2', name: 'Bash', input: { command: 'ls' } });
 });
 
 test('slimMessage survives a missing message', () => {
@@ -114,7 +118,7 @@ test('slimMessage passes a string tool_result content through clip', () => {
     role: 'user',
     content: [{ type: 'tool_result', tool_use_id: 'tu_3', is_error: false, content: 'short result' }],
   });
-  const block = (out.content as any[])[0];
+  const block = (out.content as WireBlock[])[0];
   assert.equal(block.type, 'tool_result');
   assert.equal(block.tool_use_id, 'tu_3');
   assert.equal(block.is_error, false);
@@ -125,7 +129,9 @@ test('slimMessage passes a string tool_result content through clip', () => {
     role: 'user',
     content: [{ type: 'tool_result', tool_use_id: 'tu_4', is_error: false, content: long }],
   });
-  const blockLong = (outLong.content as any[])[0];
+  const blockLong = (outLong.content as WireBlock[])[0];
+  assert.equal(blockLong.type, 'tool_result');
+  assert.ok(typeof blockLong.content === 'string');
   assert.match(blockLong.content, /more characters not shown\)$/);
 });
 
@@ -134,7 +140,7 @@ test('slimMessage handles tool_result with no content field', () => {
     role: 'user',
     content: [{ type: 'tool_result', tool_use_id: 'tu_5', is_error: true }],
   });
-  const block = (out.content as any[])[0];
+  const block = (out.content as WireBlock[])[0];
   assert.equal(block.type, 'tool_result');
   assert.equal(block.tool_use_id, 'tu_5');
   assert.equal(block.is_error, true);

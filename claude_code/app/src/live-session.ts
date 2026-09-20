@@ -112,6 +112,11 @@ export class LiveSession extends EventEmitter {
     this.closed = false;
 
     this.q = query({
+      // Double cast: InputQueue's items carry SdkUserTurn's narrower shape
+      // (type/message/parent_tool_use_id), while the SDK's SDKUserMessage
+      // additionally declares session_id/uuid/etc. The SDK's streaming-input
+      // mode accepts the smaller object at runtime, and the original
+      // JavaScript passed this identical object.
       prompt: this.input as unknown as AsyncIterable<SDKUserMessage>,
       options: {
         ...sdkOptions,
@@ -120,6 +125,8 @@ export class LiveSession extends EventEmitter {
         permissionMode: this.mode,
         resume: resume || undefined,
         includePartialMessages: true,
+        // Bridges PermissionResult, a hand-written mirror of the SDK's
+        // permission-result union, back to the SDK's own CanUseTool type.
         canUseTool: ((toolName: Parameters<CanUseTool>[0], input: Parameters<CanUseTool>[1], opts: Parameters<CanUseTool>[2]) =>
           this.askPermission(toolName, input, opts)) as CanUseTool,
         stderr: (data: string) => {
@@ -206,6 +213,8 @@ export class LiveSession extends EventEmitter {
         message: note ? `The user declined this action and said: ${note}` : 'The user declined this action.',
       };
     } else if (p.toolName === 'AskUserQuestion') {
+      // Only reached when toolName === 'AskUserQuestion'; a null input throws
+      // here exactly as `p.input.questions` did in the JavaScript.
       const input = p.input as { questions: unknown };
       result = {
         behavior: 'allow',
