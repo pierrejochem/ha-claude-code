@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- The add-on's server and panel are now written in TypeScript and built
+  during the image build. No behaviour or configuration changes.
+
 ## 0.1.0
 
 - First version: ingress panel, saved and resumable sessions, streaming

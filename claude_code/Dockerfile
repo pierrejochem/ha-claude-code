@@ -18,9 +18,14 @@ ENV NODE_ENV=production \
 
 WORKDIR /opt/app
 COPY app/package.json app/package-lock.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+# devDependencies are needed to build; they are pruned below. NODE_ENV=production
+# above makes npm default to omitting them, so --include=dev overrides that.
+RUN npm ci --include=dev
 
 COPY app/ ./
+RUN npm run build \
+ && npm prune --omit=dev \
+ && npm cache clean --force
 RUN install -m 0755 /opt/app/bin/ha-api /usr/local/bin/ha-api
 
 COPY run.sh /run.sh
