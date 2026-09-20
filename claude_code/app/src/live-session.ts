@@ -269,7 +269,7 @@ export class LiveSession extends EventEmitter {
           const changed = this.sessionId !== m.session_id;
           this.sessionId = m.session_id;
           if (m.model) this.model = this.model || m.model;
-          this.record({ k: 'init', sessionId: m.session_id, model: m.model, cwd: m.cwd, mode: m.permissionMode as PermissionMode });
+          this.record({ k: 'init', sessionId: m.session_id, model: m.model, cwd: m.cwd, mode: m.permissionMode });
           if (changed) this.emit('meta');
           this.loadModels();
         } else if (m.subtype === 'compact_boundary') {
@@ -282,7 +282,7 @@ export class LiveSession extends EventEmitter {
         if (m.type === 'user' && 'isReplay' in m && m.isReplay) return;
         this.record({
           k: 'sdk',
-          m: { type: m.type, uuid: m.uuid as string, parent_tool_use_id: m.parent_tool_use_id ?? null, message: slimMessage(m.message) },
+          m: { type: m.type, uuid: m.uuid, parent_tool_use_id: m.parent_tool_use_id ?? null, message: slimMessage(m.message) },
         });
         return;
 
