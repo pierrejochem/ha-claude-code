@@ -4,14 +4,25 @@
   "private": true,
   "type": "module",
   "description": "Claude Code panel for Home Assistant ingress",
-  "main": "server.js",
+  "main": "dist/server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "DEV=1 PORT=8099 node server.js"
+    "build": "npm run build:server && npm run build:web",
+    "build:server": "tsc -p tsconfig.server.json",
+    "build:web": "esbuild src/web/main.ts --bundle --format=iife --target=es2022 --outfile=public/app.js --sourcemap --minify",
+    "typecheck": "tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.web.json --noEmit",
+    "test": "tsc -p tsconfig.test.json && node --test .build-test/test/*.test.js",
+    "start": "node dist/server.js",
+    "dev": "npm run build && DEV=1 PORT=8099 node dist/server.js"
   },
   "engines": { "node": ">=20" },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.278",
     "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/ws": "^8.5.13",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.7.0"
   }
 }

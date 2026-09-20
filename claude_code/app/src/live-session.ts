@@ -1,40 +1,58 @@
 import { randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { query } from '@anthropic-ai/claude-agent-sdk';
+import type { CanUseTool, SDKMessage, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
+import { InputQueue } from './input-queue.js';
+import { slimMessage, slimStreamEvent, describeSuggestions, friendlyError, errorMessage } from './wire.js';
+import type { PermissionSuggestion } from './wire.js';
+import type {
+  SessionSummary,
+  SessionEvent,
+  LogEntry,
+  EvStream,
+  PermissionMode,
+  SessionStatus,
+  ModelOption,
+  ImageAttachment,
+  PermissionDecision,
+} from './shared/protocol.js';
 
 const MAX_LOG = 3000;
-const MAX_RESULT_CHARS = 30000;
 
-/** Async-iterable queue: the SDK pulls user messages from it for as long as the session lives. */
-class InputQueue {
-  constructor() {
-    this.items = [];
-    this.waiters = [];
-    this.done = false;
-  }
-  push(item) {
-    if (this.done) return;
-    const waiter = this.waiters.shift();
-    if (waiter) waiter({ value: item, done: false });
-    else this.items.push(item);
-  }
-  end() {
-    this.done = true;
-    for (const waiter of this.waiters.splice(0)) waiter({ value: undefined, done: true });
-  }
-  [Symbol.asyncIterator]() {
-    return {
-      next: () => {
-        if (this.items.length) return Promise.resolve({ value: this.items.shift(), done: false });
-        if (this.done) return Promise.resolve({ value: undefined, done: true });
-        return new Promise((resolve) => this.waiters.push(resolve));
-      },
-      return: () => {
-        this.end();
-        return Promise.resolve({ value: undefined, done: true });
-      },
-    };
-  }
+export interface LiveSessionInit {
+  cwd: string;
+  model: string | null;
+  mode: PermissionMode;
+  resume?: string;
+  historyCount: number;
+  sdkOptions: Record<string, unknown>;
+  idleMs: number;
+}
+
+/** Pending `canUseTool` prompt, keyed by requestId while the UI decides. */
+interface PendingPermission {
+  resolve: (result: PermissionResult) => void;
+  toolName: string;
+  input: unknown;
+  suggestions: PermissionSuggestion[];
+}
+
+type PermissionResult =
+  | { behavior: 'allow'; updatedInput: unknown; updatedPermissions?: PermissionSuggestion[] }
+  | { behavior: 'deny'; message: string; interrupt?: boolean };
+
+export interface LiveSession {
+  on(event: 'event', listener: (entry: LogEntry) => void): this;
+  on(event: 'stream', listener: (ev: EvStream) => void): this;
+  on(event: 'meta', listener: () => void): this;
+  on(event: 'models', listener: (models: ModelOption[]) => void): this;
+  on(event: 'closed', listener: () => void): this;
+
+  emit(event: 'event', entry: LogEntry): boolean;
+  emit(event: 'stream', ev: EvStream): boolean;
+  emit(event: 'meta'): boolean;
+  emit(event: 'models', models: ModelOption[]): boolean;
+  emit(event: 'closed'): boolean;
 }
 
 /**
@@ -47,7 +65,30 @@ class InputQueue {
  *   'closed' ()
  */
 export class LiveSession extends EventEmitter {
-  constructor({ cwd, model, mode, resume, historyCount, sdkOptions, idleMs }) {
+  readonly liveId: string;
+  cwd: string;
+  model: string | null;
+  mode: PermissionMode;
+  sessionId: string | null;
+  resumed: boolean;
+  historyCount: number;
+  title: string | null;
+  status: SessionStatus;
+  createdAt: number;
+  lastActivity: number;
+  models: ModelOption[] | null;
+
+  private log: LogEntry[];
+  private seq: number;
+  private pending: Map<string, PendingPermission>;
+  private input: InputQueue;
+  private idleMs: number;
+  private idleTimer: NodeJS.Timeout | null;
+  closed: boolean;
+
+  private q: ReturnType<typeof query>;
+
+  constructor({ cwd, model, mode, resume, historyCount, sdkOptions, idleMs }: LiveSessionInit) {
     super();
     this.liveId = randomUUID();
     this.cwd = cwd;
@@ -71,7 +112,12 @@ export class LiveSession extends EventEmitter {
     this.closed = false;
 
     this.q = query({
-      prompt: this.input,
+      // Double cast: InputQueue's items carry SdkUserTurn's narrower shape
+      // (type/message/parent_tool_use_id), while the SDK's SDKUserMessage
+      // additionally declares session_id/uuid/etc. The SDK's streaming-input
+      // mode accepts the smaller object at runtime, and the original
+      // JavaScript passed this identical object.
+      prompt: this.input as unknown as AsyncIterable<SDKUserMessage>,
       options: {
         ...sdkOptions,
         cwd,
@@ -79,17 +125,20 @@ export class LiveSession extends EventEmitter {
         permissionMode: this.mode,
         resume: resume || undefined,
         includePartialMessages: true,
-        canUseTool: (toolName, input, opts) => this.#askPermission(toolName, input, opts),
-        stderr: (data) => {
+        // Bridges PermissionResult, a hand-written mirror of the SDK's
+        // permission-result union, back to the SDK's own CanUseTool type.
+        canUseTool: ((toolName: Parameters<CanUseTool>[0], input: Parameters<CanUseTool>[1], opts: Parameters<CanUseTool>[2]) =>
+          this.askPermission(toolName, input, opts)) as CanUseTool,
+        stderr: (data: string) => {
           const line = String(data).trim();
           if (line) console.error(`[claude ${this.liveId.slice(0, 8)}] ${line}`);
         },
       },
     });
-    this.#pump();
+    this.pump();
   }
 
-  summary() {
+  summary(): SessionSummary {
     return {
       liveId: this.liveId,
       sessionId: this.sessionId,
@@ -106,9 +155,9 @@ export class LiveSession extends EventEmitter {
   }
 
   /** Send a user turn. `images` is [{ mediaType, data }] with base64 data. */
-  send(text, images = []) {
+  send(text: string, images: ImageAttachment[] = []): void {
     if (this.closed) throw new Error('This session is closed.');
-    const content = [];
+    const content: unknown[] = [];
     for (const img of images) {
       content.push({ type: 'image', source: { type: 'base64', media_type: img.mediaType, data: img.data } });
     }
@@ -116,10 +165,10 @@ export class LiveSession extends EventEmitter {
     if (!content.length) return;
 
     if (!this.title && text) this.title = text.replace(/\s+/g, ' ').slice(0, 80);
-    this.#clearIdle();
-    this.#setStatus('running');
+    this.clearIdle();
+    this.setStatus('running');
     // Images are echoed as a count only; the log should not hold megabytes of base64.
-    this.#record({ k: 'user', text, images: images.length });
+    this.record({ k: 'user', text, images: images.length });
     this.input.push({
       type: 'user',
       message: { role: 'user', content: images.length ? content : text },
@@ -127,36 +176,36 @@ export class LiveSession extends EventEmitter {
     });
   }
 
-  async interrupt() {
+  async interrupt(): Promise<void> {
     for (const [requestId] of this.pending) {
-      this.#resolvePermission(requestId, { behavior: 'deny', message: 'The user stopped the task.', interrupt: true }, 'deny');
+      this.resolvePermission(requestId, { behavior: 'deny', message: 'The user stopped the task.', interrupt: true }, 'deny');
     }
     try {
       await this.q.interrupt();
     } catch (err) {
-      console.error('interrupt failed:', err?.message || err);
+      console.error('interrupt failed:', errorMessage(err));
     }
   }
 
-  async setMode(mode) {
+  async setMode(mode: PermissionMode): Promise<void> {
     await this.q.setPermissionMode(mode);
     this.mode = mode;
-    this.#record({ k: 'mode', mode });
+    this.record({ k: 'mode', mode });
     this.emit('meta');
   }
 
-  async setModel(model) {
+  async setModel(model: string): Promise<void> {
     await this.q.setModel(model || undefined);
     this.model = model || null;
     this.emit('meta');
   }
 
   /** decision: { behavior: 'allow' | 'always' | 'deny', message?, answers? } */
-  answerPermission(requestId, decision) {
+  answerPermission(requestId: string, decision: PermissionDecision): boolean {
     const p = this.pending.get(requestId);
     if (!p) return false;
 
-    let result;
+    let result: PermissionResult;
     if (decision.behavior === 'deny') {
       const note = (decision.message || '').trim();
       result = {
@@ -164,28 +213,31 @@ export class LiveSession extends EventEmitter {
         message: note ? `The user declined this action and said: ${note}` : 'The user declined this action.',
       };
     } else if (p.toolName === 'AskUserQuestion') {
+      // Only reached when toolName === 'AskUserQuestion'; a null input throws
+      // here exactly as `p.input.questions` did in the JavaScript.
+      const input = p.input as { questions: unknown };
       result = {
         behavior: 'allow',
-        updatedInput: { questions: p.input.questions, answers: decision.answers || {} },
+        updatedInput: { questions: input.questions, answers: decision.answers || {} },
       };
     } else {
       result = { behavior: 'allow', updatedInput: p.input };
       if (decision.behavior === 'always' && p.suggestions?.length) result.updatedPermissions = p.suggestions;
     }
-    this.#resolvePermission(requestId, result, decision.behavior);
+    this.resolvePermission(requestId, result, decision.behavior);
     return true;
   }
 
-  replaySince(since = 0) {
+  replaySince(since = 0): LogEntry[] {
     return this.log.filter((entry) => entry.seq > since);
   }
 
-  close(reason = 'closed') {
+  close(reason = 'closed'): void {
     if (this.closed) return;
     this.closed = true;
-    this.#clearIdle();
+    this.clearIdle();
     for (const [requestId] of this.pending) {
-      this.#resolvePermission(requestId, { behavior: 'deny', message: 'The session was closed.' }, 'deny');
+      this.resolvePermission(requestId, { behavior: 'deny', message: 'The session was closed.' }, 'deny');
     }
     this.input.end();
     try {
@@ -194,26 +246,26 @@ export class LiveSession extends EventEmitter {
       /* already gone */
     }
     this.status = 'closed';
-    this.#record({ k: 'closed', reason });
+    this.record({ k: 'closed', reason });
     this.emit('meta');
     this.emit('closed');
   }
 
   // ---------------------------------------------------------------- internals
 
-  async #pump() {
+  private async pump(): Promise<void> {
     try {
-      for await (const m of this.q) this.#onMessage(m);
+      for await (const m of this.q) this.onMessage(m);
       if (!this.closed) this.close('ended');
     } catch (err) {
       if (this.closed) return;
       console.error(`[session ${this.liveId.slice(0, 8)}]`, err);
-      this.#record({ k: 'error', message: friendlyError(err) });
+      this.record({ k: 'error', message: friendlyError(err) });
       this.close('error');
     }
   }
 
-  #onMessage(m) {
+  private onMessage(m: SDKMessage): void {
     this.lastActivity = Date.now();
     switch (m.type) {
       case 'stream_event':
@@ -226,43 +278,46 @@ export class LiveSession extends EventEmitter {
           const changed = this.sessionId !== m.session_id;
           this.sessionId = m.session_id;
           if (m.model) this.model = this.model || m.model;
-          this.#record({ k: 'init', sessionId: m.session_id, model: m.model, cwd: m.cwd, mode: m.permissionMode });
+          this.record({ k: 'init', sessionId: m.session_id, model: m.model, cwd: m.cwd, mode: m.permissionMode });
           if (changed) this.emit('meta');
-          this.#loadModels();
+          this.loadModels();
         } else if (m.subtype === 'compact_boundary') {
-          this.#record({ k: 'compact' });
+          this.record({ k: 'compact' });
         }
         return;
 
       case 'assistant':
       case 'user':
-        if (m.type === 'user' && m.isReplay) return;
-        this.#record({
+        if (m.type === 'user' && 'isReplay' in m && m.isReplay) return;
+        this.record({
           k: 'sdk',
           m: { type: m.type, uuid: m.uuid, parent_tool_use_id: m.parent_tool_use_id ?? null, message: slimMessage(m.message) },
         });
         return;
 
-      case 'result':
-        this.#record({
+      case 'result': {
+        const result = 'result' in m ? m.result : undefined;
+        const errors = 'errors' in m ? m.errors : undefined;
+        this.record({
           k: 'result',
           subtype: m.subtype,
           isError: Boolean(m.is_error),
-          text: m.is_error ? m.result || (m.errors || []).join('\n') || m.subtype : null,
+          text: m.is_error ? result || (errors || []).join('\n') || m.subtype : null,
           durationMs: m.duration_ms,
           turns: m.num_turns,
           costUsd: m.total_cost_usd,
         });
-        this.#setStatus('idle');
-        this.#armIdle();
+        this.setStatus('idle');
+        this.armIdle();
         return;
+      }
 
       default:
         return;
     }
   }
 
-  async #loadModels() {
+  private async loadModels(): Promise<void> {
     if (this.models) return;
     try {
       const models = await this.q.supportedModels();
@@ -273,19 +328,23 @@ export class LiveSession extends EventEmitter {
     }
   }
 
-  #askPermission(toolName, input, opts) {
-    return new Promise((resolve) => {
+  private askPermission(
+    toolName: Parameters<CanUseTool>[0],
+    input: Parameters<CanUseTool>[1],
+    opts: Parameters<CanUseTool>[2]
+  ): Promise<PermissionResult> {
+    return new Promise<PermissionResult>((resolve) => {
       const requestId = opts.toolUseID || randomUUID();
       const suggestions = opts.suppressAlwaysAllowRule ? [] : opts.suggestions || [];
       this.pending.set(requestId, { resolve, toolName, input, suggestions });
 
       opts.signal?.addEventListener(
         'abort',
-        () => this.#resolvePermission(requestId, { behavior: 'deny', message: 'Cancelled.' }, 'cancelled'),
+        () => this.resolvePermission(requestId, { behavior: 'deny', message: 'Cancelled.' }, 'cancelled'),
         { once: true }
       );
 
-      this.#record({
+      this.record({
         k: 'permission',
         requestId,
         toolName,
@@ -298,114 +357,44 @@ export class LiveSession extends EventEmitter {
         alwaysLabel: describeSuggestions(suggestions),
         subagent: Boolean(opts.agentID),
       });
-      this.#setStatus('waiting');
+      this.setStatus('waiting');
     });
   }
 
-  #resolvePermission(requestId, result, behavior) {
+  private resolvePermission(requestId: string, result: PermissionResult, behavior: string): void {
     const p = this.pending.get(requestId);
     if (!p) return;
     this.pending.delete(requestId);
     p.resolve(result);
-    this.#record({ k: 'permission_resolved', requestId, behavior });
-    if (!this.closed && this.status === 'waiting' && this.pending.size === 0) this.#setStatus('running');
+    this.record({ k: 'permission_resolved', requestId, behavior });
+    if (!this.closed && this.status === 'waiting' && this.pending.size === 0) this.setStatus('running');
     else this.emit('meta');
   }
 
-  #record(ev) {
+  private record(ev: SessionEvent): void {
     const entry = { seq: ++this.seq, ev };
     this.log.push(entry);
     if (this.log.length > MAX_LOG) this.log.splice(0, this.log.length - MAX_LOG);
     this.emit('event', entry);
   }
 
-  #setStatus(status) {
+  private setStatus(status: SessionStatus): void {
     if (this.status === status) return;
     this.status = status;
     this.emit('meta');
   }
 
-  #armIdle() {
-    this.#clearIdle();
+  private armIdle(): void {
+    this.clearIdle();
     if (!this.idleMs) return;
     this.idleTimer = setTimeout(() => {
       if (this.status === 'idle') this.close('idle');
     }, this.idleMs);
-    this.idleTimer.unref?.();
+    this.idleTimer.unref();
   }
 
-  #clearIdle() {
+  private clearIdle(): void {
     if (this.idleTimer) clearTimeout(this.idleTimer);
     this.idleTimer = null;
   }
-}
-
-// ------------------------------------------------------------------ helpers
-
-function slimStreamEvent(event) {
-  // Forward only what the transcript renders; drop usage blobs and signatures.
-  switch (event.type) {
-    case 'message_start':
-      return { type: 'message_start' };
-    case 'content_block_start':
-      return { type: event.type, index: event.index, block: { type: event.content_block?.type, name: event.content_block?.name } };
-    case 'content_block_delta': {
-      const d = event.delta || {};
-      if (d.type === 'text_delta') return { type: event.type, index: event.index, text: d.text };
-      if (d.type === 'thinking_delta') return { type: event.type, index: event.index, thinking: d.thinking };
-      return { type: 'noop' };
-    }
-    case 'content_block_stop':
-      return { type: event.type, index: event.index };
-    case 'message_stop':
-      return { type: 'message_stop' };
-    default:
-      return { type: 'noop' };
-  }
-}
-
-function clip(text) {
-  if (typeof text !== 'string' || text.length <= MAX_RESULT_CHARS) return text;
-  return `${text.slice(0, MAX_RESULT_CHARS)}\n… (${text.length - MAX_RESULT_CHARS} more characters not shown)`;
-}
-
-function slimMessage(message) {
-  if (!message || typeof message.content === 'string') return { role: message?.role, content: clip(message?.content) };
-  const content = (message.content || []).map((block) => {
-    if (block.type === 'tool_result') {
-      const inner = Array.isArray(block.content)
-        ? block.content.map((c) => (c.type === 'text' ? { type: 'text', text: clip(c.text) } : { type: c.type }))
-        : clip(block.content);
-      return { type: 'tool_result', tool_use_id: block.tool_use_id, is_error: Boolean(block.is_error), content: inner };
-    }
-    if (block.type === 'thinking') return { type: 'thinking', thinking: block.thinking };
-    if (block.type === 'image') return { type: 'image' };
-    return block;
-  });
-  return { role: message.role, content };
-}
-
-function describeSuggestions(suggestions) {
-  const rules = [];
-  for (const s of suggestions) {
-    if (s.type === 'addRules' && s.behavior === 'allow') {
-      for (const r of s.rules || []) rules.push(r.ruleContent ? `${r.toolName}(${r.ruleContent})` : r.toolName);
-    } else if (s.type === 'addDirectories') {
-      for (const d of s.directories || []) rules.push(`files in ${d}`);
-    } else if (s.type === 'setMode') {
-      rules.push(`switch to ${s.mode} mode`);
-    }
-  }
-  return rules.slice(0, 3).join(', ') || null;
-}
-
-function friendlyError(err) {
-  const msg = String(err?.message || err);
-  if (/Native CLI binary/.test(msg)) {
-    return `${msg}\nThe Claude Code binary for this platform was not installed. Rebuild the add-on and check the build log for npm errors.`;
-  }
-  if (/exited with code/.test(msg)) {
-    return `${msg}\nClaude Code stopped unexpectedly. The add-on log has the details.`;
-  }
-  return msg;
 }

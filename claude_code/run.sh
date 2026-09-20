@@ -9,4 +9,4 @@ mkdir -p "$HOME" /config/backups
 
 bashio::log.info "Starting Claude Code panel on port 8099"
 cd /opt/app
-exec node server.js
+exec node dist/server.js
