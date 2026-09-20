@@ -31,14 +31,33 @@ export async function openFolderPicker(target: string | null): Promise<void> {
     // type-level guard for `state.config: PublicState | null`, not a
     // behaviour change from the original unguarded `state.config.roots`.
     for (const r of state.config?.roots ?? []) {
-      list.append(el('button', { class: 'pop-item', type: 'button', onclick: () => openFolderPicker(r.path) }, icon(ICON.folder), r.label, el('small', { text: r.path })));
+      list.append(el('button', {
+        class: 'pop-item',
+        type: 'button',
+        // This handler replaces the popover's children, detaching this button.
+        // Without stopping the click here it reaches main.ts's click-outside
+        // handler, which sees a target that is no longer inside the popover and
+        // hides it. refs.folderChip's own handler stops propagation for the
+        // same reason.
+        onclick: (e) => { e.stopPropagation(); void openFolderPicker(r.path); },
+      }, icon(ICON.folder), r.label, el('small', { text: r.path })));
     }
     return;
   }
   try {
     const data = await getDirs(target);
-    list.append(el('button', { class: 'pop-item', type: 'button', onclick: () => openFolderPicker(data.parent) }, icon(ICON.up), data.parent ? 'Up one level' : 'All folders'));
-    for (const d of data.dirs) list.append(el('button', { class: 'pop-item', type: 'button', onclick: () => openFolderPicker(data.path + '/' + d) }, icon(ICON.folder), d));
+    list.append(el('button', {
+      class: 'pop-item',
+      type: 'button',
+      onclick: (e) => { e.stopPropagation(); void openFolderPicker(data.parent); },
+    }, icon(ICON.up), data.parent ? 'Up one level' : 'All folders'));
+    for (const d of data.dirs) {
+      list.append(el('button', {
+        class: 'pop-item',
+        type: 'button',
+        onclick: (e) => { e.stopPropagation(); void openFolderPicker(data.path + '/' + d); },
+      }, icon(ICON.folder), d));
+    }
     if (!data.dirs.length) list.append(el('p', { class: 'session-empty', text: 'No folders inside this one.' }));
     foot.append(el('button', { class: 'btn primary', type: 'button', text: 'Work in this folder', onclick: () => { state.current.cwd = data.path; pop.hidden = true; onHeaderChange(); } }));
   } catch (err) {
