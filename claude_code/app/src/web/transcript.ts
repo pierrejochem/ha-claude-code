@@ -41,7 +41,7 @@ export function settleTool(id: string, content: unknown, isError: boolean): void
   const text = resultText(content).trim();
   // Precedence here is load-bearing and copied character for character from
   // app.js:304 (port fidelity governs; do not add clarifying parentheses).
-  if ((text && !['Edit', 'MultiEdit', 'Write', 'TodoWrite'].includes(t.name)) || (text && isError)) {
+  if (text && !['Edit', 'MultiEdit', 'Write', 'TodoWrite'].includes(t.name) || (text && isError)) {
     t.resultBox.replaceChildren(
       el('div', { class: 'label', text: isError ? 'Error' : 'Result' }),
       codeBlock(text, isError ? 'error' : 'output'),
