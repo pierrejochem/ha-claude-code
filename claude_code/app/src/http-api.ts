@@ -48,13 +48,10 @@ export async function handleApi(
     const body: SessionDetail = {
       info: info ? { sessionId: info.sessionId, title: info.customTitle || info.summary, cwd: info.cwd || null } : null,
       messages: messages.map((m): WireSdkMessage => {
-        // getSessionMessages (@anthropic-ai/claude-agent-sdk) types a transcript
-        // entry's `type` as 'user' | 'assistant' | 'system' and `message` as
-        // `unknown` -- unlike the live WS path's SDKMessage, where `message` is
-        // a concrete BetaMessage/MessageParam per variant. Both fields are
-        // forwarded unchanged here, exactly as server.js did (no slimMessage
-        // transform on this route), so these two casts are not provably sound
-        // for every value the SDK could return; see task-7-report.md.
+        // The SDK types this as 'user' | 'assistant' | 'system', but
+        // getSessionMessages' includeSystemMessages option defaults to false and we
+        // never pass it, so the SDK filters 'system' entries out before returning.
+        // Only 'user' and 'assistant' can reach here.
         return {
           type: m.type as WireSdkMessage['type'],
           uuid: m.uuid,
