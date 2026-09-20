@@ -20,9 +20,9 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "@types/node": "^22.10.0",
+    "@types/node": "^26.6.1",
     "@types/ws": "^8.5.13",
-    "esbuild": "^0.24.0",
-    "typescript": "^5.7.0"
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2"
   }
 }
