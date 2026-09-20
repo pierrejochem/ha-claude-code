@@ -303,7 +303,7 @@ $('closeSidebar').addEventListener('click', closeNav);
 $('scrim').addEventListener('click', closeNav);
 refs.folderChip.addEventListener('click', (e) => {
   e.stopPropagation();
-  refs.popover.hidden ? openFolderPicker(null) : (refs.popover.hidden = true);
+  refs.popover.hidden ? void openFolderPicker(null) : (refs.popover.hidden = true);
 });
 document.addEventListener('click', (e) => {
   if (!refs.popover.hidden && !(e.target instanceof Node && refs.popover.contains(e.target))) refs.popover.hidden = true;
