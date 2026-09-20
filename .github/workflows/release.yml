@@ -1,0 +1,95 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Build both architectures without pushing
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: verify version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.read.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Read version from config.yaml and check it against the tag
+        id: read
+        run: |
+          set -euo pipefail
+          version=$(grep -E '^version:' claude_code/config.yaml | head -1 | sed -E 's/^version:[[:space:]]*"?([^"]*)"?[[:space:]]*$/\1/')
+          if [ -z "$version" ]; then
+            echo "Could not read version from claude_code/config.yaml" >&2
+            exit 1
+          fi
+          echo "config.yaml version: $version"
+          if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
+            # The Supervisor pulls the tag matching config.yaml's version, so a
+            # mismatch here would ship an image nobody can install.
+            if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+              echo "Tag $GITHUB_REF_NAME does not match config.yaml version $version" >&2
+              exit 1
+            fi
+            echo "tag $GITHUB_REF_NAME matches"
+          else
+            echo "manual dispatch; skipping the tag comparison"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  check:
+    name: ci
+    needs: verify
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    name: publish (${{ matrix.arch }})
+    needs: [verify, check]
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        if: ${{ inputs.dry_run != true }}
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Home Assistant substitutes {arch} into config.yaml's image: key, so each
+      # architecture is its own image name. No manifest merge is involved.
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          context: claude_code
+          push: ${{ inputs.dry_run != true }}
+          tags: |
+            ghcr.io/pierrejochem/${{ matrix.arch }}-addon-claude_code:${{ needs.verify.outputs.version }}
+            ghcr.io/pierrejochem/${{ matrix.arch }}-addon-claude_code:latest
+          build-args: |
+            BUILD_VERSION=${{ needs.verify.outputs.version }}
+            BUILD_ARCH=${{ matrix.arch }}
+          cache-from: type=gha,scope=${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.arch }}
