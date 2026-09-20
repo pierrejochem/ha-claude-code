@@ -2,9 +2,17 @@
 // is running and how to behave around a live home. Keep it factual: anything
 // written here is treated as ground truth in every session.
 
-export function buildSystemAppend({ exposeHaApi, roots }) {
-  const has = (p) => roots.some((r) => r.path === p);
-  const lines = [];
+import type { Root } from './shared/protocol.js';
+
+export function buildSystemAppend({
+  exposeHaApi,
+  roots,
+}: {
+  exposeHaApi: boolean;
+  roots: Root[];
+}): string {
+  const has = (p: string) => roots.some((r) => r.path === p);
+  const lines: string[] = [];
 
   lines.push(
     `# Environment: Home Assistant add-on`,
