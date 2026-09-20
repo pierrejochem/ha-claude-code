@@ -14,9 +14,9 @@
   payloads are dropped, which the panel never rendered anyway, and tool results
   longer than 30 000 characters are clipped exactly as they were live — so a
   replayed transcript now matches what the session showed, rather than more.
-- Installing from the store now downloads a ready-built image instead of
-  compiling the add-on on your device, so it takes about as long as the
-  download rather than several minutes.
+- Installing from the store no longer compiles the add-on on your device; it
+  downloads a ready-built image instead. The download is a similar size either
+  way — what goes away is the build step.
 
 ## 0.1.0
 
