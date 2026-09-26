@@ -265,6 +265,12 @@ export interface SessionListItem {
   title: string;
   cwd: string | null;
   lastModified: number;
+  /**
+   * False when the session's folder is outside the roots this add-on can
+   * reach, which a session borrowed from another Claude config folder often
+   * is. The panel still opens its transcript; the server refuses to resume it.
+   */
+  reachable: boolean;
 }
 
 export interface SessionDetail {

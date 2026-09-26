@@ -128,6 +128,9 @@ async function openSession(s: SidebarItem): Promise<void> {
   renderSidebar();
 
   const opening = state.current;
+  if (s.reachable === false) {
+    addNotice(`This session ran in ${s.cwd}, outside the folders this add-on can reach. You can read it here, but not continue it.`);
+  }
   try {
     // For a resumed session the live log only holds what happened since the
     // resume, so the earlier part comes from disk, capped where the log

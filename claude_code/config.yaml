@@ -1,5 +1,5 @@
 name: Claude Code
-version: "0.2.0"
+version: "0.3.0"
 slug: claude_code
 # Prebuilt by .github/workflows/release.yml. The Supervisor substitutes {arch}
 # and pulls the tag matching `version` above, so the two must stay in step —
@@ -47,6 +47,8 @@ options:
   protect_secrets: true
   max_live_sessions: 3
   idle_timeout_minutes: 20
+  extra_session_dirs: []
+  remote_control: false
 
 schema:
   claude_oauth_token: password?
@@ -58,3 +60,6 @@ schema:
   protect_secrets: bool
   max_live_sessions: int(1,6)
   idle_timeout_minutes: int(2,240)
+  extra_session_dirs:
+    - str
+  remote_control: bool

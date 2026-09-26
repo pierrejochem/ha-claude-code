@@ -51,6 +51,64 @@ Put standing instructions for Claude in `/homeassistant/CLAUDE.md` (naming
 conventions, which files are generated, rooms and people). Claude Code reads
 it at the start of every session.
 
+## Sessions from elsewhere
+
+The sidebar lists what is in the add-on's own session store,
+`/data/home/.claude/projects`, which is part of Home Assistant backups. Claude
+Code sessions are files on the machine that created them: they are not synced
+through your Claude account, and there is no API that lists an account's
+sessions. So a session you started on your laptop, in another add-on, or at
+claude.ai/code does not turn up here by itself. Two options change that.
+
+**Also show sessions from** (`extra_session_dirs`) borrows sessions from other
+Claude config folders on this machine. The folder has to be one both sides can
+see, which means `/homeassistant`, `/config` or `/share` - an add-on cannot read
+another add-on's `/data`, so `/share` is usually the one to pick. Run the other
+CLI with its config folder there:
+
+```
+CLAUDE_CONFIG_DIR=/share/claude claude
+```
+
+then add `/share/claude` to the option. The add-on copies the transcripts it
+finds into its own store and keeps the copies up to date, so a session picks up
+messages it gained elsewhere a few seconds later. Nothing in the folder you point
+at is written to or deleted, and when you remove the folder from the option the
+copies go again. Copies cost disk in `/data` and go into backups with the rest of
+the add-on's store, so a folder full of long sessions is worth a look before you
+point at it.
+
+A borrowed session that ran in `/homeassistant`, `/config` or `/share` continues
+normally. One that ran anywhere else - a laptop path, another container - is
+shown in italics and opens read-only, because the folder it worked in is not
+here. Once you do continue a borrowed session in the panel, the add-on keeps its
+own copy of it from then on: the two histories have diverged, and the original
+stays as it was.
+
+**Show sessions on claude.ai** (`remote_control`) turns on Remote Control for
+every new session, so each one appears in your session list at
+[claude.ai/code](https://claude.ai/code) and in the Claude app, where you can
+follow it or send it a message from your phone. Claude keeps running in this
+add-on and works on your configuration either way; the remote view is a window
+onto this process, not a copy of it.
+
+It needs the **Claude subscription token** on a Pro, Max, Team or Enterprise plan
+- Claude Code refuses API keys for this - and on Team or Enterprise an owner has
+to enable Remote Control in the [Claude Code admin
+settings](https://claude.ai/admin-settings/claude-code) first. The add-on asks
+for it two ways at once, because the Agent SDK has no switch of its own: the
+`--remote-control` flag on each session, and `remoteControlAtStartup` in
+`/data/home/.claude/settings.json`, which it adds when the option is on and
+removes when it is off. Nothing else in that file is touched. While a session is
+connected its transcript is stored on Anthropic's servers so the devices stay in
+sync; file access and commands stay here. The add-on log says at startup whether
+Remote Control is on, and why not when it is not.
+
+The reverse trip is not possible from the panel: a *cloud* session, one that ran
+on Anthropic's infrastructure from claude.ai/code or the Claude app, can only be
+pulled into a terminal with `claude --teleport`, which needs a git checkout of
+the repository that session worked on.
+
 ## What Claude can reach
 
 | Inside the add-on | What it is |
@@ -104,6 +162,8 @@ Read these once; this add-on edits a running home.
 | `protect_secrets` | `true` | Deny rules for secrets and auth files |
 | `max_live_sessions` | `3` | Claude Code processes kept running at once |
 | `idle_timeout_minutes` | `20` | Close an idle process after this long |
+| `extra_session_dirs` | empty | Other Claude config folders to list sessions from |
+| `remote_control` | `false` | Put new sessions in your claude.ai/code session list |
 
 Each running session is its own Claude Code process, roughly 300 to 500 MB.
 On a 4 GB Raspberry Pi 5 keep `max_live_sessions` at 2 or 3.
@@ -118,5 +178,16 @@ On a 4 GB Raspberry Pi 5 keep `max_live_sessions` at 2 or 3.
   package during the image build. Rebuild the add-on and read the build log.
 - **Search or file listing fails:** the image must contain `ripgrep` and run
   with `USE_BUILTIN_RIPGREP=0`; both are set in the Dockerfile.
+- **A folder in `extra_session_dirs` is ignored.** The log says which one and
+  why: it is outside `/homeassistant`, `/config` and `/share`, it holds no
+  `projects` subfolder, or it is the add-on's own store.
+- **A borrowed session will not continue.** If its folder is not reachable from
+  this add-on it stays read-only; the panel says so when you open it.
+- **Sessions do not appear on claude.ai.** Remote Control needs the
+  subscription token, not an API key, and on Team or Enterprise it has to be
+  enabled for the organisation; the log line at startup names the reason. If the
+  log says it is on and the sessions still do not show up, Claude Code may be
+  declining to bridge a session it did not start interactively - open a session
+  in the panel and check the list at claude.ai/code before and after.
 - The add-on log (Settings, Apps, Claude Code, Log) shows Claude Code's own
   stderr, prefixed with the session id.
