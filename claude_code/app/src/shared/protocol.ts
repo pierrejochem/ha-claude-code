@@ -241,6 +241,12 @@ export interface SrvEvent {
   ev: SessionEvent;
 }
 export interface SrvLive { type: 'live'; live: SessionSummary[] }
+/**
+ * The saved session list changed — one was deleted, here or in another open
+ * panel. Carries no list: the panel refetches /api/sessions, which is where
+ * that list comes from anyway.
+ */
+export interface SrvSessions { type: 'sessions' }
 export interface SrvModels { type: 'models'; models: ModelOption[] }
 export interface SrvError {
   type: 'error';
@@ -255,6 +261,7 @@ export type ServerMessage =
   | SrvReplay
   | SrvEvent
   | SrvLive
+  | SrvSessions
   | SrvModels
   | SrvError;
 

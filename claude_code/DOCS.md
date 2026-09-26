@@ -43,6 +43,11 @@ Save, restart the add-on, and open **Claude Code** in the sidebar.
   what to do instead.
 - **Stop** interrupts the current turn. You can also type while Claude works;
   the message is queued into the running task.
+- **Deleting a session**: point at a row in the sidebar and use the bin button,
+  then confirm. It removes the transcript from the add-on's store for good,
+  including the sub-agent transcripts belonging to it; there is no undo, and
+  nothing outside the add-on is touched. A session still working cannot be
+  deleted - stop it, and delete it once it has finished.
 - Paste, drop or attach screenshots (PNG, JPEG, GIF, WebP, up to 5 MB each).
 - Sessions are saved. Idle ones are closed after a while to free memory and
   resume when you send the next message, also after an add-on restart.
@@ -74,7 +79,10 @@ then add `/share/claude` to the option. The add-on copies the transcripts it
 finds into its own store and keeps the copies up to date, so a session picks up
 messages it gained elsewhere a few seconds later. Nothing in the folder you point
 at is written to or deleted, and when you remove the folder from the option the
-copies go again. Copies cost disk in `/data` and go into backups with the rest of
+copies go again. Deleting a borrowed session in the panel removes the add-on's
+copy and notes that you did, so it is not copied in again while the original is
+still there; the original itself stays put, and deleting it there is the only way
+to get rid of it for good. Copies cost disk in `/data` and go into backups with the rest of
 the add-on's store, so a folder full of long sessions is worth a look before you
 point at it.
 
