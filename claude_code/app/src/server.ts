@@ -48,6 +48,20 @@ function liveList(): SessionSummary[] {
   return [...live.values()].map((s) => s.summary());
 }
 
+/**
+ * Clears the way for `DELETE /api/sessions/:id`: an idle session running here
+ * is closed so its transcript stops being written, and a busy one is refused
+ * with the reason the panel shows. Returns null once nothing is in the way.
+ */
+function closeForDelete(sessionId: string): string | null {
+  const running = [...live.values()].filter((s) => s.sessionId === sessionId && !s.closed);
+  if (running.some((s) => s.status !== 'idle')) {
+    return 'That session is still working. Stop it first, then delete it.';
+  }
+  for (const session of running) session.close('deleted');
+  return null;
+}
+
 function makeRoom(): void {
   const max = Math.max(1, Number(options.max_live_sessions) || 3);
   if (live.size < max) return;
@@ -148,7 +162,13 @@ const server = http.createServer(async (req, res) => {
   }
   try {
     const url = new URL(req.url || '/', 'http://local');
-    if (url.pathname.startsWith('/api/')) return await handleApi(req, res, url, publicState);
+    if (url.pathname.startsWith('/api/')) {
+      return await handleApi(req, res, url, {
+        publicState,
+        closeForDelete,
+        sessionsChanged: () => broadcast({ type: 'sessions' }),
+      });
+    }
 
     const rel = url.pathname === '/' ? 'index.html' : url.pathname.slice(1);
     const file = path.join(PUBLIC_DIR, path.normalize(rel));
@@ -211,7 +231,7 @@ function reportSessionSources(): void {
       for (const message of report.errors) console.error(`session mirror: ${message}`);
       if (extraSessionDirs.dirs.length) {
         console.log(
-          `Extra session folders: ${extraSessionDirs.dirs.join(', ')} (${report.sources} readable, ${report.copied} sessions copied in, ${report.adopted} kept after being continued here, ${report.pruned} removed)`
+          `Extra session folders: ${extraSessionDirs.dirs.join(', ')} (${report.sources} readable, ${report.copied} sessions copied in, ${report.adopted} kept after being continued here, ${report.pruned} removed, ${report.skipped} left out after being deleted here)`
         );
       } else if (report.pruned) {
         console.log(`Removed ${report.pruned} borrowed sessions; no extra session folders are configured.`);

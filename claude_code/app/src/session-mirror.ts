@@ -23,6 +23,10 @@
 //   - A transcript the add-on itself wrote is never touched.
 //   - Once a borrowed session is continued here, so the copy has moved on from
 //     the source, the copy is left alone and becomes the add-on's own.
+//
+// The index also remembers the borrowed sessions deleted from the panel. Their
+// sources are still there, so without that record the next run would copy them
+// straight back in and the delete would look as though it had not worked.
 
 import fsp from 'node:fs/promises';
 import path from 'node:path';
@@ -43,6 +47,16 @@ interface CopyRecord {
 /** Keyed by the copy's path relative to `<own>/projects`. */
 type CopyIndex = Record<string, CopyRecord>;
 
+interface MirrorIndex {
+  copies: CopyIndex;
+  /**
+   * Borrowed sessions deleted from the panel, keyed like `copies` and valued by
+   * the source the copy came from. A key here is never copied again while a
+   * configured folder still holds it; once no folder does, the record goes too.
+   */
+  deleted: Record<string, string>;
+}
+
 export interface MirrorReport {
   /** Extra config folders that held a projects folder we could read. */
   sources: number;
@@ -52,6 +66,8 @@ export interface MirrorReport {
   pruned: number;
   /** Copies kept although their source moved on, because they were continued here. */
   adopted: number;
+  /** Sources not copied because the session was deleted from the panel. */
+  skipped: number;
   errors: string[];
 }
 
@@ -72,20 +88,30 @@ function insideAny(dirs: string[], candidate: string): boolean {
   return dirs.some((dir) => candidate === dir || candidate.startsWith(dir + path.sep));
 }
 
-async function readIndex(file: string): Promise<CopyIndex> {
+async function readIndex(file: string): Promise<MirrorIndex> {
+  const empty: MirrorIndex = { copies: {}, deleted: {} };
   const raw = await fsp.readFile(file, 'utf8').catch(() => null);
-  if (!raw) return {};
+  if (!raw) return empty;
+  let parsed: unknown;
   try {
-    const parsed: unknown = JSON.parse(raw);
+    parsed = JSON.parse(raw);
+  } catch {
     // A hand-edited or half-written index degrades to "everything here is the
     // add-on's own", which leaves copies in place rather than deleting them.
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as CopyIndex) : {};
-  } catch {
-    return {};
+    return empty;
   }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return empty;
+  const record = parsed as Record<string, unknown>;
+  // 0.3.0 wrote the copy records at the top level. Keys there are always
+  // `<project>/<session>.jsonl`, so `copies` can only be the newer shape.
+  if (!record.copies) return { copies: parsed as CopyIndex, deleted: {} };
+  return {
+    copies: (record.copies as CopyIndex | undefined) ?? {},
+    deleted: (record.deleted as Record<string, string> | undefined) ?? {},
+  };
 }
 
-async function writeIndex(file: string, index: CopyIndex): Promise<void> {
+async function writeIndex(file: string, index: MirrorIndex): Promise<void> {
   const tmp = `${file}.tmp`;
   await fsp.writeFile(tmp, JSON.stringify(index, null, 1));
   await fsp.rename(tmp, file);
@@ -102,7 +128,7 @@ function untouched(record: CopyRecord, copy: { mtimeMs: number; size: number }):
  * changed, and removed once its folder is unconfigured or its source deleted.
  */
 export async function mirrorSessions(extraDirs: string[], own: string): Promise<MirrorReport> {
-  const report: MirrorReport = { sources: 0, copied: 0, pruned: 0, adopted: 0, errors: [] };
+  const report: MirrorReport = { sources: 0, copied: 0, pruned: 0, adopted: 0, skipped: 0, errors: [] };
   const target = path.join(own, 'projects');
   const indexFile = path.join(own, INDEX_FILE);
   try {
@@ -112,8 +138,9 @@ export async function mirrorSessions(extraDirs: string[], own: string): Promise<
     return report;
   }
 
-  const index = await readIndex(indexFile);
+  const { copies: index, deleted } = await readIndex(indexFile);
   const next: CopyIndex = {};
+  const nextDeleted: Record<string, string> = {};
 
   for (const dir of extraDirs) {
     const source = path.join(dir, 'projects');
@@ -130,8 +157,15 @@ export async function mirrorSessions(extraDirs: string[], own: string): Promise<
         const key = path.join(project.name, file.name);
         // The same session id in two configured folders: the first one wins,
         // rather than the two overwriting each other on alternate runs.
-        if (next[key]) continue;
+        if (next[key] || nextDeleted[key]) continue;
         const transcript = path.join(from, file.name);
+        if (deleted[key]) {
+          // Deleted from the panel. The record is kept against the source that
+          // still holds it, which may not be the one the copy came from.
+          nextDeleted[key] = transcript;
+          report.skipped++;
+          continue;
+        }
         const copy = path.join(target, key);
         try {
           const record = index[key];
@@ -205,9 +239,19 @@ export async function mirrorSessions(extraDirs: string[], own: string): Promise<
     }
   }
 
+  // A delete is remembered only for as long as something would bring the
+  // session back. Same caution as the prune pass: a source this run did not
+  // reach, because its folder was briefly unreadable, keeps its record rather
+  // than letting the next run copy a deleted session in again.
+  for (const [key, source] of Object.entries(deleted)) {
+    if (nextDeleted[key]) continue;
+    if (insideAny(extraDirs, source) && (await statOf(source))) nextDeleted[key] = source;
+  }
+
   try {
-    if (Object.keys(next).length) await writeIndex(indexFile, next);
-    else await fsp.rm(indexFile, { force: true });
+    if (Object.keys(next).length || Object.keys(nextDeleted).length) {
+      await writeIndex(indexFile, { copies: next, deleted: nextDeleted });
+    } else await fsp.rm(indexFile, { force: true });
   } catch (err) {
     report.errors.push(`could not write ${indexFile}: ${errorMessage(err)}`);
   }
@@ -237,4 +281,32 @@ export function syncSessionMirror(
       inFlight = null;
     });
   return inFlight;
+}
+
+/**
+ * Records that the session was deleted from the panel, so a copy of it is not
+ * made again. Returns true when it was a borrowed session the index still
+ * tracked — one of the add-on's own has nothing to record and nothing to
+ * bring it back.
+ *
+ * Call it after the transcript is gone: a record written for a session that
+ * then failed to delete would hide it from the next run's refresh.
+ */
+export async function forgetMirroredSession(own: string, sessionId: string): Promise<boolean> {
+  const indexFile = path.join(own, INDEX_FILE);
+  const { copies, deleted } = await readIndex(indexFile);
+  // The project folder a session sits under is Claude Code's own encoding of
+  // its working folder, which this module stays out of: match on the file name
+  // instead, over every project folder the index knows.
+  const keys = Object.keys(copies).filter((key) => path.basename(key) === `${sessionId}.jsonl`);
+  if (!keys.length) return false;
+  for (const key of keys) {
+    deleted[key] = copies[key].source;
+    delete copies[key];
+  }
+  await writeIndex(indexFile, { copies, deleted });
+  // The next listing must see the deletion rather than a cached report from
+  // before it, or a borrowed session could be copied back within the window.
+  last = null;
+  return true;
 }

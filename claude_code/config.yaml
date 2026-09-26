@@ -1,5 +1,5 @@
 name: Claude Code
-version: "0.3.0"
+version: "0.4.0"
 slug: claude_code
 # Prebuilt by .github/workflows/release.yml. The Supervisor substitutes {arch}
 # and pulls the tag matching `version` above, so the two must stay in step —
