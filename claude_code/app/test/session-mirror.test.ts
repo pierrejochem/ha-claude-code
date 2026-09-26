@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { mirrorSessions } from '../src/session-mirror.js';
+import { mirrorSessions, forgetMirroredSession } from '../src/session-mirror.js';
 
 async function write(file: string, body = '{"type":"user"}\n'): Promise<string> {
   await fsp.mkdir(path.dirname(file), { recursive: true });
@@ -170,7 +170,7 @@ test('takes the first configured folder when two hold the same session id', asyn
 test('a missing extra folder is skipped, not an error', async () => {
   const { own, extra } = await sandbox();
   const report = await mirrorSessions([extra('nothing-here')], own);
-  assert.deepEqual(report, { sources: 0, copied: 0, pruned: 0, adopted: 0, errors: [] });
+  assert.deepEqual(report, { sources: 0, copied: 0, pruned: 0, adopted: 0, skipped: 0, errors: [] });
 });
 
 test('leaves no index file behind once nothing is borrowed', async () => {
@@ -182,4 +182,85 @@ test('leaves no index file behind once nothing is borrowed', async () => {
 
   await mirrorSessions([], own);
   await assert.rejects(fsp.lstat(path.join(own, '.ha-borrowed-sessions.json')));
+});
+
+test('does not copy a borrowed session in again once it was deleted here', async () => {
+  const { own, extra } = await sandbox();
+  const shared = extra('shared');
+  const source = await write(transcript(shared, '-share-work', 'aaaa'), 'borrowed\n');
+  await write(transcript(shared, '-share-work', 'bbbb'));
+  await mirrorSessions([shared], own);
+
+  // What the delete route does: the transcript goes, then the record.
+  const copy = transcript(own, '-share-work', 'aaaa');
+  await fsp.rm(copy);
+  assert.equal(await forgetMirroredSession(own, 'aaaa'), true);
+
+  const report = await mirrorSessions([shared], own);
+  assert.equal(report.copied, 0);
+  assert.equal(report.skipped, 1);
+  await assert.rejects(fsp.lstat(copy));
+  // The source is untouched, and the session beside it still mirrors.
+  assert.equal(await read(source), 'borrowed\n');
+  assert.ok(await fsp.stat(transcript(own, '-share-work', 'bbbb')));
+
+  // Still gone after the source moves on, which would otherwise refresh it.
+  await touch(source, 'borrowed\nmore\n');
+  const later = await mirrorSessions([shared], own);
+  assert.equal(later.skipped, 1);
+  await assert.rejects(fsp.lstat(copy));
+});
+
+test('forgets the deletion once nothing would bring the session back', async () => {
+  const { own, extra } = await sandbox();
+  const shared = extra('shared');
+  const source = await write(transcript(shared, '-share-work', 'aaaa'));
+  await mirrorSessions([shared], own);
+  await fsp.rm(transcript(own, '-share-work', 'aaaa'));
+  await forgetMirroredSession(own, 'aaaa');
+  await mirrorSessions([shared], own);
+
+  // The source goes: there is nothing left to hold the deletion against.
+  await fsp.rm(source);
+  await mirrorSessions([shared], own);
+  await assert.rejects(fsp.lstat(path.join(own, '.ha-borrowed-sessions.json')));
+
+  // A session created there later, reusing the id, is borrowed like any other.
+  await write(transcript(shared, '-share-work', 'aaaa'), 'a new one\n');
+  const report = await mirrorSessions([shared], own);
+  assert.equal(report.copied, 1);
+  assert.equal(report.skipped, 0);
+  assert.equal(await read(transcript(own, '-share-work', 'aaaa')), 'a new one\n');
+});
+
+test("deleting one of the add-on's own sessions records nothing", async () => {
+  const { own, extra } = await sandbox();
+  const shared = extra('shared');
+  await write(transcript(shared, '-share-work', 'aaaa'));
+  await write(transcript(own, '-share-other', 'cccc'), 'ours\n');
+  await mirrorSessions([shared], own);
+
+  assert.equal(await forgetMirroredSession(own, 'cccc'), false);
+  // The borrowed session's record is left exactly as it was.
+  const report = await mirrorSessions([shared], own);
+  assert.equal(report.copied, 0);
+  assert.equal(report.skipped, 0);
+  assert.equal(report.pruned, 0);
+});
+
+test('reads an index written before deletions were recorded', async () => {
+  const { own, extra } = await sandbox();
+  const shared = extra('shared');
+  await write(transcript(shared, '-share-work', 'aaaa'));
+  await mirrorSessions([shared], own);
+
+  // 0.3.0's shape: the copy records at the top level, with no `copies` key.
+  const indexFile = path.join(own, '.ha-borrowed-sessions.json');
+  const index = JSON.parse(await read(indexFile)) as { copies: Record<string, unknown> };
+  await fsp.writeFile(indexFile, JSON.stringify(index.copies));
+
+  const report = await mirrorSessions([shared], own);
+  assert.equal(report.copied, 0);
+  assert.equal(report.pruned, 0);
+  assert.equal(report.adopted, 0);
 });
