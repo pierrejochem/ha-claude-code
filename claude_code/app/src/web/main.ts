@@ -34,6 +34,7 @@ import {
 } from './composer';
 import { initFolderPicker, openFolderPicker } from './folder-picker';
 import {
+  clearDeleteConfirm,
   currentLive,
   initSidebar,
   liveFor,
@@ -103,6 +104,7 @@ function applyEvent(ev: SessionEvent): void {
 }
 
 function newSession(): void {
+  clearDeleteConfirm();
   state.current = { kind: 'new', liveId: null, sessionId: null, cwd: state.config?.defaultCwd || null, title: null, loading: false };
   state.lastSeq = 0;
   resetTranscript();
@@ -117,6 +119,7 @@ function newSession(): void {
 
 async function openSession(s: SidebarItem): Promise<void> {
   closeNav();
+  clearDeleteConfirm();
   const liveEntry = s.live || liveFor(s.sessionId);
   state.current = { kind: liveEntry ? 'live' : 'disk', liveId: liveEntry?.liveId || null, sessionId: s.sessionId, cwd: s.cwd, title: s.title, loading: true };
   state.lastSeq = 0;
@@ -152,6 +155,16 @@ async function openSession(s: SidebarItem): Promise<void> {
     addNotice(`Could not load this session: ${err instanceof Error ? err.message : String(err)}`, true);
   }
   stick(true);
+}
+
+/**
+ * A session was deleted. Only the one on screen needs anything doing: its
+ * transcript is now of something that no longer exists, so the panel starts
+ * over rather than offering to continue it.
+ */
+function onSessionDeleted(sessionId: string): void {
+  if (state.current.sessionId !== sessionId) return;
+  newSession();
 }
 
 // -------------------------------------------------------------- server
@@ -190,6 +203,11 @@ function onServer(msg: ServerMessage): void {
       renderSidebar();
       renderHeader();
       syncControls();
+      return;
+    case 'sessions':
+      // Deleted here or in another open panel; either way the list is refetched
+      // rather than patched, since the server is the one that knows what is left.
+      void loadSessions();
       return;
     case 'models':
       state.models = msg.models;
@@ -249,7 +267,7 @@ function onServer(msg: ServerMessage): void {
 }
 
 // ----------------------------------------------------------------- wiring
-initSidebar(openSession);
+initSidebar(openSession, onSessionDeleted);
 initComposer(renderHeader);
 initFolderPicker(renderHeader);
 
@@ -315,6 +333,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     refs.popover.hidden = true;
     closeNav();
+    if (clearDeleteConfirm()) renderSidebar();
   }
   if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'o') {
     e.preventDefault();

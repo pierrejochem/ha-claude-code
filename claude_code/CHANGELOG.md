@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.0
+
+- Sessions can be deleted from the sidebar: point at a row, use the bin button
+  and confirm. The transcript and the sub-agent transcripts beside it are
+  removed from the add-on's store; a session that is still working is refused
+  until it has finished, and one that is merely open is closed first. Every
+  panel that has the session list open is told, so a deleted session does not
+  linger in a second tab.
+- Deleting a session borrowed through **Also show sessions from** removes the
+  add-on's copy and records that it was deleted, so it is not copied back in
+  while the original is still in the folder it came from. The original is never
+  touched, and the record is dropped once nothing would bring the session back.
+
 ## 0.3.0
 
 - The sidebar can show sessions from other Claude config folders on this
