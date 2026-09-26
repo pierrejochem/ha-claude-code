@@ -6,7 +6,8 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { listSessions, getSessionMessages, getSessionInfo } from '@anthropic-ai/claude-agent-sdk';
-import { isInsideRoots, defaultCwd } from './options.js';
+import { isInsideRoots, defaultCwd, configDir, extraSessionDirs } from './options.js';
+import { syncSessionMirror } from './session-mirror.js';
 import { slimMessage } from './wire.js';
 import type { PublicState, SessionListItem, SessionDetail, DirListing, WireSdkMessage } from './shared/protocol.js';
 
@@ -27,15 +28,23 @@ export async function handleApi(
   if (route === '/state') return sendJson(res, 200, publicState());
 
   if (route === '/sessions') {
+    // Pick up transcripts from the extra config folders before listing, so a
+    // session another `claude` on this machine started a moment ago is in it.
+    const mirror = await syncSessionMirror(extraSessionDirs.dirs, configDir);
+    for (const message of mirror.errors) console.error(`session mirror: ${message}`);
+
     const sessions = await listSessions({ limit: 300 });
-    const body: SessionListItem[] = sessions
-      .filter((s) => !s.cwd || isInsideRoots(s.cwd))
-      .map((s) => ({
-        sessionId: s.sessionId,
-        title: s.customTitle || s.summary || s.firstPrompt || 'Untitled',
-        cwd: s.cwd || null,
-        lastModified: s.lastModified,
-      }));
+    // Sessions whose folder is out of reach used to be dropped here. They are
+    // listed and marked instead: a borrowed session usually ran somewhere this
+    // add-on cannot write, and hiding it is what made the panel look as though
+    // it only knew about its own sessions.
+    const body: SessionListItem[] = sessions.map((s) => ({
+      sessionId: s.sessionId,
+      title: s.customTitle || s.summary || s.firstPrompt || 'Untitled',
+      cwd: s.cwd || null,
+      lastModified: s.lastModified,
+      reachable: !s.cwd || isInsideRoots(s.cwd),
+    }));
     return sendJson(res, 200, body);
   }
 

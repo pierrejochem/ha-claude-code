@@ -93,6 +93,9 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .session:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
 .session[aria-current="true"] { background: color-mix(in srgb, var(--ink) 10%, transparent); }
 .session-title { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; }
+/* Borrowed from another Claude config folder and readable only: the folder it
+   ran in is outside what this add-on can reach. */
+.session.out-of-reach .session-title { color: var(--muted); font-style: italic; }
 .session-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: transparent; }
 .session-dot.running { background: var(--accent); animation: pulse 1.4s ease-in-out infinite; }
 .session-dot.waiting { background: var(--warn); }

@@ -12,6 +12,8 @@ export interface SidebarItem {
   title: string;
   cwd: string | null;
   lastModified: number;
+  /** False for a session whose folder this add-on cannot reach; see SessionListItem. */
+  reachable?: boolean;
   live?: SessionSummary;
 }
 
@@ -35,7 +37,9 @@ export function currentLive(): SessionSummary | undefined {
 export function renderSidebar(): void {
   const items: SidebarItem[] = state.sessions.map((s) => ({ ...s, live: liveFor(s.sessionId) }));
   for (const l of state.live) {
-    if (!items.some((i) => i.live === l)) items.unshift({ sessionId: l.sessionId, title: l.title || 'New session', cwd: l.cwd, lastModified: l.lastActivity, live: l });
+    // A running session started in a folder this add-on can reach, by
+    // construction: startSession refuses any other.
+    if (!items.some((i) => i.live === l)) items.unshift({ sessionId: l.sessionId, title: l.title || 'New session', cwd: l.cwd, lastModified: l.lastActivity, reachable: true, live: l });
   }
   const day = 86400000;
   const midnight = new Date().setHours(0, 0, 0, 0);
@@ -55,8 +59,10 @@ export function renderSidebar(): void {
     for (const s of bucket) {
       const active = (s.live && s.live.liveId === state.current.liveId) || (s.sessionId && s.sessionId === state.current.sessionId);
       const status = s.live?.status;
+      const outOfReach = s.reachable === false;
       refs.list.append(el('button', {
-        class: 'session', type: 'button', 'aria-current': active ? 'true' : null, title: s.cwd || null,
+        class: 'session' + (outOfReach ? ' out-of-reach' : ''), type: 'button', 'aria-current': active ? 'true' : null,
+        title: outOfReach ? `${s.cwd} - read-only, outside the folders this add-on can reach` : s.cwd || null,
         onclick: () => onOpen(s),
       },
       el('span', { class: 'session-title', text: s.title }),

@@ -12,9 +12,24 @@ import { LiveSession } from './live-session.js';
 import { handleApi, sendJson } from './http-api.js';
 import { createWsApi } from './ws-api.js';
 import { errorMessage } from './wire.js';
+import { syncSessionMirror } from './session-mirror.js';
+import { applyRemoteControlSetting } from './remote-control.js';
 import { isPermissionMode, MODES } from './shared/protocol.js';
 import type { MsgStart, PublicState, SessionSummary, ModelOption } from './shared/protocol.js';
-import { options, roots, isInsideRoots, defaultCwd, authConfigured, sdkOptions, DEV, PORT, INGRESS_PROXY } from './options.js';
+import {
+  options,
+  roots,
+  isInsideRoots,
+  defaultCwd,
+  authConfigured,
+  sdkOptions,
+  configDir,
+  extraSessionDirs,
+  remoteControlBlocker,
+  DEV,
+  PORT,
+  INGRESS_PROXY,
+} from './options.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // dist/server.js sits one level below the app root, where public/ and
@@ -53,9 +68,16 @@ async function startSession({ cwd, model, mode, resume }: MsgStart): Promise<Liv
   if (resume) {
     const existing = [...live.values()].find((s) => s.sessionId === resume && !s.closed);
     if (existing) return existing;
-    // A session can only be resumed from the folder it was created in.
+    // A session can only be resumed from the folder it was created in, and that
+    // folder has to be one this add-on can reach: a session borrowed from
+    // another config folder on this machine often ran somewhere it cannot.
     const info = await getSessionInfo(resume).catch(() => undefined);
     if (info?.cwd) workdir = info.cwd;
+    if (!isInsideRoots(workdir)) {
+      throw new Error(
+        `That session ran in ${workdir}, which is outside the folders this add-on can reach. You can read it here, but not continue it.`
+      );
+    }
     historyCount = (await getSessionMessages(resume).catch(() => [])).length;
   } else if (!isInsideRoots(workdir)) {
     throw new Error(`${workdir} is outside the folders this add-on can reach.`);
@@ -178,8 +200,49 @@ function shutdown(): void {
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
+function reportSessionSources(): void {
+  for (const { path: dir, reason } of extraSessionDirs.rejected) {
+    console.warn(`Ignoring extra session folder ${dir}: it ${reason}.`);
+  }
+  // Runs even with no extra folders configured, which is how the copies left
+  // behind by a folder since removed from the option get cleaned up.
+  void syncSessionMirror(extraSessionDirs.dirs, configDir, { force: true })
+    .then((report) => {
+      for (const message of report.errors) console.error(`session mirror: ${message}`);
+      if (extraSessionDirs.dirs.length) {
+        console.log(
+          `Extra session folders: ${extraSessionDirs.dirs.join(', ')} (${report.sources} readable, ${report.copied} sessions copied in, ${report.adopted} kept after being continued here, ${report.pruned} removed)`
+        );
+      } else if (report.pruned) {
+        console.log(`Removed ${report.pruned} borrowed sessions; no extra session folders are configured.`);
+      }
+    })
+    .catch((err: unknown) => console.error('session mirror failed:', err));
+}
+
+function reportRemoteControl(): void {
+  const blocker = remoteControlBlocker(options);
+  // The settings key is cleared again when the option goes off, so turning it
+  // off in the add-on configuration is enough to stop it.
+  const wanted = options.remote_control && !blocker;
+  void applyRemoteControlSetting(wanted, configDir)
+    .then((outcome) => {
+      if (outcome.state === 'failed') console.error(`Remote Control setting: ${outcome.reason}`);
+    })
+    .catch((err: unknown) => console.error('Remote Control setting failed:', err));
+
+  if (!options.remote_control) return;
+  if (blocker) {
+    console.warn(`Remote Control is on but cannot start: ${blocker}. Sessions run here only.`);
+    return;
+  }
+  console.log('Remote Control is on: new sessions appear in your session list at claude.ai/code and in the Claude app.');
+}
+
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Claude Code panel ${PKG.version} listening on :${PORT}${DEV ? ' (dev mode, no ingress check)' : ''}`);
   console.log(`Working folders: ${roots.map((r) => r.path).join(', ') || '(none found)'}`);
   if (!authConfigured()) console.log('No Claude credentials configured yet. Add a token in the add-on configuration.');
+  reportSessionSources();
+  reportRemoteControl();
 });

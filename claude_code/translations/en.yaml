@@ -39,3 +39,17 @@ configuration:
   idle_timeout_minutes:
     name: Close idle sessions after (minutes)
     description: Closed sessions stay in the sidebar and resume when you send the next message.
+  extra_session_dirs:
+    name: Also show sessions from
+    description: >-
+      Claude config folders on a shared path, for example `/share/claude` if you
+      run the CLI elsewhere with `CLAUDE_CONFIG_DIR=/share/claude`. Their
+      sessions appear in the sidebar. One that ran outside `/homeassistant`,
+      `/config` or `/share` is readable but cannot be continued here.
+  remote_control:
+    name: Show sessions on claude.ai
+    description: >-
+      Registers each new session with your Claude account, so it appears in the
+      session list at claude.ai/code and in the Claude app and can be steered
+      from your phone. Claude still runs here. Needs the subscription token; API
+      keys are not supported.
