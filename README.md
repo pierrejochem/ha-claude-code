@@ -7,6 +7,11 @@ your configuration folder — `configuration.yaml`, automations, scripts,
 packages — and can validate the configuration and restart Core through the
 Supervisor API. It asks before it edits or runs anything.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/panel-dark.png">
+  <img alt="The Claude Code panel in the Home Assistant sidebar: a session diagnosing a porch light automation, with an approval card showing the diff Claude wants to write to automations.yaml" src="docs/panel-light.png">
+</picture>
+
 - **A chat panel in the sidebar**, served over ingress: admin-only, and no port
   to expose.
 - **Approvals before anything changes.** Per-action prompts, *Always allow*
@@ -38,7 +43,7 @@ Supervisor API. It asks before it edits or runs anything.
 3. Configuration tab: paste a token from `claude setup-token` or an API key.
 4. Start, then open **Claude Code** in the sidebar.
 
-[DOCS.md](DOCS.md) is the add-on's documentation: signing in, the permission
+[DOCS.md](claude_code/DOCS.md) is the add-on's documentation: signing in, the permission
 modes, what Claude can reach, sessions from elsewhere, every option, and
 troubleshooting. [CHANGELOG](claude_code/CHANGELOG.md) has what changed per
 version.
