@@ -1,7 +1,49 @@
 # Claude Code for Home Assistant
 
-A Home Assistant app (add-on) that runs Claude Code on your Home Assistant
-machine and gives it a Claude Desktop-style panel in the sidebar.
+A Home Assistant add-on (**Apps**, in recent releases) that runs
+[Claude Code](https://claude.com/claude-code) on your Home Assistant machine and
+gives it a Claude Desktop-style panel in the sidebar. Claude works directly in
+your configuration folder — `configuration.yaml`, automations, scripts,
+packages — and can validate the configuration and restart Core through the
+Supervisor API. It asks before it edits or runs anything.
+
+- **A chat panel in the sidebar**, served over ingress: admin-only, and no port
+  to expose.
+- **Approvals before anything changes.** Per-action prompts, *Always allow*
+  rules, or Plan mode, where Claude only reads and then shows you a plan.
+- **Sessions are saved** and survive an add-on restart. Idle ones close to free
+  memory and resume on your next message; delete the ones you are done with.
+- **Your folders, and no others**: `/homeassistant`, `/config` and `/share`.
+  `secrets.yaml` and the auth store can be kept out of reach.
+- **Home Assistant context.** Claude's shell gets an `ha-api` helper for the
+  Core REST API and the Supervisor endpoints: states, services, config check,
+  restart.
+- **Prebuilt images** for `aarch64` and `amd64`, so installing does not compile
+  anything on the device.
+
+## Requirements
+
+- Home Assistant OS or Supervised. Add-ons need the Supervisor, so Home
+  Assistant Container and Core installations cannot run this.
+- `aarch64` or `amd64`. Each running session is its own Claude Code process at
+  roughly 300 to 500 MB, so on a 4 GB Raspberry Pi 5 keep two or three.
+- A Claude subscription (Pro, Max, Team or Enterprise) or an Anthropic API key.
+
+## Install
+
+1. Settings > Apps > App store > menu > **Repositories**, and add
+   `https://github.com/pierrejochem/ha-claude-code`.
+2. "Claude Code" appears in the store. **Install** — this downloads a ready-built
+   image instead of compiling the add-on on the device.
+3. Configuration tab: paste a token from `claude setup-token` or an API key.
+4. Start, then open **Claude Code** in the sidebar.
+
+[DOCS.md](DOCS.md) is the add-on's documentation: signing in, the permission
+modes, what Claude can reach, sessions from elsewhere, every option, and
+troubleshooting. [CHANGELOG](claude_code/CHANGELOG.md) has what changed per
+version.
+
+## Repository layout
 
 ```
 claude_code/
@@ -15,15 +57,6 @@ claude_code/
     bin/ha-api            curl wrapper for the Core and Supervisor APIs
     public/               the panel (built from src/web with esbuild)
 ```
-
-## Install
-
-1. Settings > Apps > App store > menu > **Repositories**, and add
-   `https://github.com/pierrejochem/ha-claude-code`.
-2. "Claude Code" appears in the store. **Install** — this downloads a ready-built
-   image instead of compiling the add-on on the device.
-3. Configuration tab: paste a token from `claude setup-token` or an API key.
-4. Start, then open **Claude Code** in the sidebar.
 
 ## Run your own changes on Home Assistant
 
@@ -61,3 +94,9 @@ token deltas are broadcast without being logged. A reconnecting browser sends
 the last sequence number it saw and gets the rest, which matters on phones
 where ingress sockets drop often. Permission prompts are the SDK's
 `canUseTool` callback held open until the panel answers.
+
+## Releasing
+
+[RELEASING.md](RELEASING.md). The short version: the Supervisor pulls the image
+tag matching `version` in `claude_code/config.yaml`, so the tag is pushed and
+published before the bump reaches `main`.
